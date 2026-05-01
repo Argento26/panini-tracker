@@ -10,65 +10,65 @@ import { storage } from './storage.js';
 
 const TEAMS = [
   // Group A
-  { code: 'MEX', name: 'Mexico', group: 'A', color: '#006847' },
-  { code: 'RSA', name: 'South Africa', group: 'A', color: '#007749' },
-  { code: 'KOR', name: 'South Korea', group: 'A', color: '#CD2E3A' },
-  { code: 'CZE', name: 'Czechia', group: 'A', color: '#11457E' },
+  { code: 'MEX', name: 'Mexico', group: 'A', flag: '🇲🇽', color: '#006847' },
+  { code: 'RSA', name: 'South Africa', group: 'A', flag: '🇿🇦', color: '#007749' },
+  { code: 'KOR', name: 'South Korea', group: 'A', flag: '🇰🇷', color: '#CD2E3A' },
+  { code: 'CZE', name: 'Czechia', group: 'A', flag: '🇨🇿', color: '#11457E' },
   // Group B
-  { code: 'CAN', name: 'Canada', group: 'B', color: '#FF0000' },
-  { code: 'BIH', name: 'Bosnia & Herz.', group: 'B', color: '#002F6C' },
-  { code: 'QAT', name: 'Qatar', group: 'B', color: '#8A1538' },
-  { code: 'SUI', name: 'Switzerland', group: 'B', color: '#DA291C' },
+  { code: 'CAN', name: 'Canada', group: 'B', flag: '🇨🇦', color: '#FF0000' },
+  { code: 'BIH', name: 'Bosnia & Herz.', group: 'B', flag: '🇧🇦', color: '#002F6C' },
+  { code: 'QAT', name: 'Qatar', group: 'B', flag: '🇶🇦', color: '#8A1538' },
+  { code: 'SUI', name: 'Switzerland', group: 'B', flag: '🇨🇭', color: '#DA291C' },
   // Group C
-  { code: 'BRA', name: 'Brazil', group: 'C', color: '#FEDF00' },
-  { code: 'MAR', name: 'Morocco', group: 'C', color: '#C1272D' },
-  { code: 'HAI', name: 'Haiti', group: 'C', color: '#00209F' },
-  { code: 'SCO', name: 'Scotland', group: 'C', color: '#005EB8' },
+  { code: 'BRA', name: 'Brazil', group: 'C', flag: '🇧🇷', color: '#FEDF00' },
+  { code: 'MAR', name: 'Morocco', group: 'C', flag: '🇲🇦', color: '#C1272D' },
+  { code: 'HAI', name: 'Haiti', group: 'C', flag: '🇭🇹', color: '#00209F' },
+  { code: 'SCO', name: 'Scotland', group: 'C', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', color: '#005EB8' },
   // Group D
-  { code: 'USA', name: 'USA', group: 'D', color: '#3C3B6E' },
-  { code: 'PAR', name: 'Paraguay', group: 'D', color: '#D52B1E' },
-  { code: 'AUS', name: 'Australia', group: 'D', color: '#FFCD00' },
-  { code: 'TUR', name: 'Türkiye', group: 'D', color: '#E30A17' },
+  { code: 'USA', name: 'USA', group: 'D', flag: '🇺🇸', color: '#3C3B6E' },
+  { code: 'PAR', name: 'Paraguay', group: 'D', flag: '🇵🇾', color: '#D52B1E' },
+  { code: 'AUS', name: 'Australia', group: 'D', flag: '🇦🇺', color: '#FFCD00' },
+  { code: 'TUR', name: 'Türkiye', group: 'D', flag: '🇹🇷', color: '#E30A17' },
   // Group E
-  { code: 'GER', name: 'Germany', group: 'E', color: '#000000' },
-  { code: 'CUW', name: 'Curaçao', group: 'E', color: '#002B7F' },
-  { code: 'CIV', name: "Côte d'Ivoire", group: 'E', color: '#FF8200' },
-  { code: 'ECU', name: 'Ecuador', group: 'E', color: '#FFD700' },
+  { code: 'GER', name: 'Germany', group: 'E', flag: '🇩🇪', color: '#000000' },
+  { code: 'CUW', name: 'Curaçao', group: 'E', flag: '🇨🇼', color: '#002B7F' },
+  { code: 'CIV', name: "Côte d'Ivoire", group: 'E', flag: '🇨🇮', color: '#FF8200' },
+  { code: 'ECU', name: 'Ecuador', group: 'E', flag: '🇪🇨', color: '#FFD700' },
   // Group F
-  { code: 'NED', name: 'Netherlands', group: 'F', color: '#FF6600' },
-  { code: 'JPN', name: 'Japan', group: 'F', color: '#BC002D' },
-  { code: 'SWE', name: 'Sweden', group: 'F', color: '#006AA7' },
-  { code: 'TUN', name: 'Tunisia', group: 'F', color: '#E70013' },
+  { code: 'NED', name: 'Netherlands', group: 'F', flag: '🇳🇱', color: '#FF6600' },
+  { code: 'JPN', name: 'Japan', group: 'F', flag: '🇯🇵', color: '#BC002D' },
+  { code: 'SWE', name: 'Sweden', group: 'F', flag: '🇸🇪', color: '#006AA7' },
+  { code: 'TUN', name: 'Tunisia', group: 'F', flag: '🇹🇳', color: '#E70013' },
   // Group G
-  { code: 'BEL', name: 'Belgium', group: 'G', color: '#000000' },
-  { code: 'EGY', name: 'Egypt', group: 'G', color: '#CE1126' },
-  { code: 'IRN', name: 'Iran', group: 'G', color: '#239F40' },
-  { code: 'NZL', name: 'New Zealand', group: 'G', color: '#000000' },
+  { code: 'BEL', name: 'Belgium', group: 'G', flag: '🇧🇪', color: '#000000' },
+  { code: 'EGY', name: 'Egypt', group: 'G', flag: '🇪🇬', color: '#CE1126' },
+  { code: 'IRN', name: 'Iran', group: 'G', flag: '🇮🇷', color: '#239F40' },
+  { code: 'NZL', name: 'New Zealand', group: 'G', flag: '🇳🇿', color: '#000000' },
   // Group H
-  { code: 'ESP', name: 'Spain', group: 'H', color: '#AA151B' },
-  { code: 'CPV', name: 'Cape Verde', group: 'H', color: '#003893' },
-  { code: 'KSA', name: 'Saudi Arabia', group: 'H', color: '#006C35' },
-  { code: 'URU', name: 'Uruguay', group: 'H', color: '#5CBFE9' },
+  { code: 'ESP', name: 'Spain', group: 'H', flag: '🇪🇸', color: '#AA151B' },
+  { code: 'CPV', name: 'Cape Verde', group: 'H', flag: '🇨🇻', color: '#003893' },
+  { code: 'KSA', name: 'Saudi Arabia', group: 'H', flag: '🇸🇦', color: '#006C35' },
+  { code: 'URU', name: 'Uruguay', group: 'H', flag: '🇺🇾', color: '#5CBFE9' },
   // Group I
-  { code: 'FRA', name: 'France', group: 'I', color: '#0055A4' },
-  { code: 'SEN', name: 'Senegal', group: 'I', color: '#00853F' },
-  { code: 'IRQ', name: 'Iraq', group: 'I', color: '#CE1126' },
-  { code: 'NOR', name: 'Norway', group: 'I', color: '#BA0C2F' },
+  { code: 'FRA', name: 'France', group: 'I', flag: '🇫🇷', color: '#0055A4' },
+  { code: 'SEN', name: 'Senegal', group: 'I', flag: '🇸🇳', color: '#00853F' },
+  { code: 'IRQ', name: 'Iraq', group: 'I', flag: '🇮🇶', color: '#CE1126' },
+  { code: 'NOR', name: 'Norway', group: 'I', flag: '🇳🇴', color: '#BA0C2F' },
   // Group J
-  { code: 'ARG', name: 'Argentina', group: 'J', color: '#75AADB' },
-  { code: 'ALG', name: 'Algeria', group: 'J', color: '#006233' },
-  { code: 'AUT', name: 'Austria', group: 'J', color: '#ED2939' },
-  { code: 'JOR', name: 'Jordan', group: 'J', color: '#000000' },
+  { code: 'ARG', name: 'Argentina', group: 'J', flag: '🇦🇷', color: '#75AADB' },
+  { code: 'ALG', name: 'Algeria', group: 'J', flag: '🇩🇿', color: '#006233' },
+  { code: 'AUT', name: 'Austria', group: 'J', flag: '🇦🇹', color: '#ED2939' },
+  { code: 'JOR', name: 'Jordan', group: 'J', flag: '🇯🇴', color: '#000000' },
   // Group K
-  { code: 'POR', name: 'Portugal', group: 'K', color: '#006600' },
-  { code: 'COD', name: 'DR Congo', group: 'K', color: '#007FFF' },
-  { code: 'UZB', name: 'Uzbekistan', group: 'K', color: '#0099B5' },
-  { code: 'COL', name: 'Colombia', group: 'K', color: '#FCD116' },
+  { code: 'POR', name: 'Portugal', group: 'K', flag: '🇵🇹', color: '#006600' },
+  { code: 'COD', name: 'DR Congo', group: 'K', flag: '🇨🇩', color: '#007FFF' },
+  { code: 'UZB', name: 'Uzbekistan', group: 'K', flag: '🇺🇿', color: '#0099B5' },
+  { code: 'COL', name: 'Colombia', group: 'K', flag: '🇨🇴', color: '#FCD116' },
   // Group L
-  { code: 'ENG', name: 'England', group: 'L', color: '#FFFFFF' },
-  { code: 'CRO', name: 'Croatia', group: 'L', color: '#FF0000' },
-  { code: 'PAN', name: 'Panama', group: 'L', color: '#005AA7' },
-  { code: 'GHA', name: 'Ghana', group: 'L', color: '#006B3F' },
+  { code: 'ENG', name: 'England', group: 'L', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', color: '#FFFFFF' },
+  { code: 'CRO', name: 'Croatia', group: 'L', flag: '🇭🇷', color: '#FF0000' },
+  { code: 'PAN', name: 'Panama', group: 'L', flag: '🇵🇦', color: '#005AA7' },
+  { code: 'GHA', name: 'Ghana', group: 'L', flag: '🇬🇭', color: '#006B3F' },
 ];
 
 // Build the full sticker checklist
@@ -599,13 +599,6 @@ export default function PaniniTracker() {
           >
             <Package size={12} /> Open Pack
           </button>
-          <button onClick={exportData} className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex items-center gap-1">
-            <Download size={12} /> Export
-          </button>
-          <label className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex items-center gap-1 cursor-pointer">
-            <Upload size={12} /> Import
-            <input type="file" accept=".json" onChange={importData} className="hidden" />
-          </label>
         </div>
       </div>
 
@@ -645,6 +638,7 @@ export default function PaniniTracker() {
                       code={t.code}
                       name={t.name}
                       color={t.color}
+                      flag={t.flag}
                       active={activeTeam === t.code}
                       onClick={() => selectTeam(t.code)}
                       stats={teamStats[t.code]}
@@ -681,6 +675,7 @@ export default function PaniniTracker() {
                 count={collection[sticker.id] || 0}
                 onAdd={() => updateCount(sticker.id, 1)}
                 onRemove={() => updateCount(sticker.id, -1)}
+                needMode={filter === 'need'}
               />
             ))}
           </div>
@@ -715,7 +710,7 @@ function StatBlock({ icon, label, value, accent }) {
   );
 }
 
-function TeamButton({ code, name, color, active, onClick, stats }) {
+function TeamButton({ code, name, color, flag, active, onClick, stats }) {
   const pct = stats ? (stats.got / stats.total) * 100 : 0;
   const complete = stats && stats.got === stats.total;
   return (
@@ -730,6 +725,7 @@ function TeamButton({ code, name, color, active, onClick, stats }) {
         <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: color }} />
       )}
       <div className="flex items-baseline gap-2 mt-0.5">
+        {flag && <span className="text-base leading-none">{flag}</span>}
         <div className="mono text-[11px] tracking-wider font-bold">{code}</div>
         <div className={`serif text-[11px] truncate ${active ? 'text-stone-300' : 'text-stone-700'}`}>
           {name}
@@ -748,7 +744,7 @@ function TeamButton({ code, name, color, active, onClick, stats }) {
   );
 }
 
-function StickerCard({ sticker, count, onAdd, onRemove }) {
+function StickerCard({ sticker, count, onAdd, onRemove, needMode }) {
   const got = count > 0;
   const dupes = count > 1;
   const dupeCount = Math.max(0, count - 1);
@@ -772,7 +768,7 @@ function StickerCard({ sticker, count, onAdd, onRemove }) {
       )}
 
       {/* Got stamp */}
-      {got && (
+      {got && !needMode && (
         <div className="absolute top-2 right-2 stamp-anim">
           <div className="border-2 border-emerald-700 text-emerald-700 mono text-[8px] font-bold px-1 py-0.5 rotate-[-12deg] opacity-80">
             ✓ GOT
@@ -789,26 +785,35 @@ function StickerCard({ sticker, count, onAdd, onRemove }) {
         </div>
       </div>
 
-      {/* Counter */}
-      <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-400/40">
-        <button
-          onClick={onRemove}
-          disabled={count === 0}
-          className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-700 transition-colors"
-        >
-          <Minus size={14} />
-        </button>
-        <div className="display text-2xl text-stone-900">
-          {count}
-          {dupes && <span className="text-orange-700 text-xs ml-1">+{dupeCount}</span>}
-        </div>
+      {/* Action area — single button in needMode, +/- counter otherwise */}
+      {needMode ? (
         <button
           onClick={onAdd}
-          className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 hover:bg-emerald-700 transition-colors"
+          className="w-full mt-3 px-2 py-2 bg-emerald-700 hover:bg-emerald-600 text-white mono text-[11px] uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1"
         >
-          <Plus size={14} />
+          <Check size={14} /> I got it!
         </button>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-400/40">
+          <button
+            onClick={onRemove}
+            disabled={count === 0}
+            className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-700 transition-colors"
+          >
+            <Minus size={14} />
+          </button>
+          <div className="display text-2xl text-stone-900">
+            {count}
+            {dupes && <span className="text-orange-700 text-xs ml-1">+{dupeCount}</span>}
+          </div>
+          <button
+            onClick={onAdd}
+            className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 hover:bg-emerald-700 transition-colors"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1291,6 +1296,7 @@ function StatsView({ collection, timeline, album, teams }) {
           {teamProgress.map(t => (
             <div key={t.code} className="paper border-2 border-stone-300 p-2 flex items-center gap-3">
               <div className="w-2 h-10 flex-shrink-0" style={{ backgroundColor: t.color }} />
+              <span className="text-2xl flex-shrink-0">{t.flag}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline">
                   <span className="serif font-bold text-stone-900 truncate">{t.name}</span>
