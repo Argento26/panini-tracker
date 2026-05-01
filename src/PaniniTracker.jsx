@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download, Upload, UsersRound, ArrowLeftRight, LogOut, Crown, Package, Share2, BarChart3, Lock, Zap, Calendar, HelpCircle } from 'lucide-react';
+import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download, Upload, UsersRound, ArrowLeftRight, LogOut, Crown, Package, Share2, BarChart3, Lock, Zap, Calendar, HelpCircle, ArrowUp } from 'lucide-react';
 import { storage } from './storage.js';
 
 // ============================================================================
@@ -137,6 +137,9 @@ export default function PaniniTracker() {
   const [appVersion, setAppVersion] = useState(null); // hash of the loaded JS bundle
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+
+  // Show "back to top" button after scrolling down
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Timeline: array of { stickerId, ts } — appended whenever a sticker first goes from 0 → 1
   const [timeline, setTimeline] = useState([]);
@@ -283,6 +286,16 @@ export default function PaniniTracker() {
     setShowWelcome(false);
     await storage.set('panini-wc-2026-welcomed', '1').catch(() => {});
   };
+
+  // Track scroll position to show/hide "back to top" button
+  useEffect(() => {
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Sync collection to shared group storage whenever it changes (debounced)
   useEffect(() => {
@@ -837,6 +850,17 @@ export default function PaniniTracker() {
 
       {/* WELCOME / HELP MODAL */}
       {showWelcome && <WelcomeModal onClose={dismissWelcome} />}
+
+      {/* BACK TO TOP BUTTON */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Back to top"
+        className={`fixed bottom-5 right-5 z-40 w-12 h-12 bg-stone-900 text-amber-400 border-2 border-stone-900 sticker-shadow flex items-center justify-center transition-all duration-300 hover:bg-red-700 ${
+          showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
+        <ArrowUp size={20} />
+      </button>
     </div>
   );
 }
@@ -1779,13 +1803,14 @@ function WelcomeModal({ onClose }) {
             <ul className="space-y-1.5 ml-4 list-disc">
               <li><strong>Share Needs</strong> (top right) — texts yourself or shares a clean list of missing stickers, perfect for trading with people outside your group.</li>
               <li><strong>Lock</strong> — disables all taps. Use this when you hand your phone to someone to look at the album without them accidentally changing things.</li>
+              <li><strong>Back to top arrow</strong> (floating bottom-right) — appears when you've scrolled down. Tap it to jump back to the masthead.</li>
             </ul>
           </section>
 
           <section>
             <h3 className="display text-lg text-red-700 mb-1">When new versions come out</h3>
             <p>
-              If the developer (that's you, or your friend who made this) ships an update, you'll see a green <strong>"🆕 New version available"</strong> banner at the top. Tap <strong>Reload</strong> and you're on the latest version.
+              If the developer ships an update, you'll see a green <strong>"🆕 New version available"</strong> banner at the top. Tap <strong>Reload</strong> and you're on the latest version.
             </p>
           </section>
 
