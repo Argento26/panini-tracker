@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download, Upload, UsersRound, ArrowLeftRight, LogOut, Crown, Package, Share2, BarChart3, Lock, Zap, Calendar } from 'lucide-react';
+import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download, Upload, UsersRound, ArrowLeftRight, LogOut, Crown, Package, Share2, BarChart3, Lock, Zap, Calendar, HelpCircle } from 'lucide-react';
 import { storage } from './storage.js';
 
 // ============================================================================
@@ -730,6 +730,13 @@ export default function PaniniTracker() {
           >
             <Lock size={12} /> {screenLocked ? 'Locked' : 'Lock'}
           </button>
+          <button
+            onClick={() => setShowWelcome(true)}
+            className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex items-center gap-1"
+            title="How to use this app"
+          >
+            <HelpCircle size={12} /> Help
+          </button>
         </div>
       </div>
 
@@ -818,21 +825,12 @@ export default function PaniniTracker() {
 
       {/* FOOTER */}
       <footer className="border-t-4 border-stone-900 paper py-6">
-        <div className="max-w-6xl mx-auto px-6 text-center mono text-xs text-stone-600 space-y-2">
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => setShowWelcome(true)}
-              className="underline hover:text-stone-900"
-            >
-              Help / How to use
-            </button>
-            <span className="text-stone-400">·</span>
-            <span className="text-[10px] text-stone-500">
-              Version {appVersion ? appVersion.slice(0, 7) : 'dev'}
-            </span>
-          </div>
+        <div className="max-w-6xl mx-auto px-6 text-center mono text-xs text-stone-600 space-y-1">
           <div>
             UNOFFICIAL TRACKER · NOT AFFILIATED WITH PANINI OR FIFA · YOUR COLLECTION IS PRIVATE · GROUP DATA IS SHARED WITH ANYONE USING YOUR GROUP CODE
+          </div>
+          <div className="text-[10px] text-stone-500">
+            Version {appVersion ? appVersion.slice(0, 7) : 'dev'}
           </div>
         </div>
       </footer>
@@ -1792,7 +1790,7 @@ function WelcomeModal({ onClose }) {
 
           <section className="border-t-2 border-stone-300 pt-4">
             <p className="text-stone-600 text-xs">
-              💡 You can revisit this guide anytime from the <strong>Help / How to use</strong> link at the bottom of the page.
+              💡 You can revisit this guide anytime by tapping the <strong>Help</strong> button at the top.
             </p>
           </section>
         </div>
