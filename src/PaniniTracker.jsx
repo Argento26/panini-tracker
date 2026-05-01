@@ -818,19 +818,60 @@ export default function PaniniTracker() {
             No stickers match these filters.
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {visibleStickers.map(sticker => (
-              <StickerCard
-                key={sticker.id}
-                sticker={sticker}
-                count={collection[sticker.id] || 0}
-                onAdd={() => updateCount(sticker.id, 1)}
-                onRemove={() => updateCount(sticker.id, -1)}
-                needMode={filter === 'need'}
-                locked={screenLocked}
-              />
-            ))}
-          </div>
+          (() => {
+            // Group visible stickers by their section
+            const groups = [];
+            const groupMap = {};
+            visibleStickers.forEach(s => {
+              if (!groupMap[s.section]) {
+                groupMap[s.section] = { section: s.section, team: s.team, items: [] };
+                groups.push(groupMap[s.section]);
+              }
+              groupMap[s.section].items.push(s);
+            });
+
+            return (
+              <div className="space-y-8">
+                {groups.map(g => {
+                  // Find team metadata for header (flag, code, color)
+                  const teamMeta = TEAMS.find(t => t.code === g.team);
+                  const sectionTotalInAlbum = ALBUM.filter(s => s.section === g.section).length;
+                  const sectionGotInAlbum = ALBUM.filter(s => s.section === g.section && collection[s.id] > 0).length;
+                  return (
+                    <div key={g.section}>
+                      {/* Section header */}
+                      <div className="mb-3 flex items-center gap-2">
+                        {teamMeta?.color && (
+                          <div className="w-1.5 h-7 flex-shrink-0" style={{ backgroundColor: teamMeta.color }} />
+                        )}
+                        {teamMeta?.flag && <span className="text-xl flex-shrink-0">{teamMeta.flag}</span>}
+                        {teamMeta && (
+                          <span className="mono text-xs font-bold text-stone-900 tracking-wider">{teamMeta.code}</span>
+                        )}
+                        <span className="display text-xl text-stone-900 truncate">{g.section.toUpperCase()}</span>
+                        <div className="flex-1 border-b border-dashed border-stone-400" />
+                        <span className="mono text-[10px] text-stone-600 flex-shrink-0">{sectionGotInAlbum}/{sectionTotalInAlbum}</span>
+                      </div>
+                      {/* Sticker grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {g.items.map(sticker => (
+                          <StickerCard
+                            key={sticker.id}
+                            sticker={sticker}
+                            count={collection[sticker.id] || 0}
+                            onAdd={() => updateCount(sticker.id, 1)}
+                            onRemove={() => updateCount(sticker.id, -1)}
+                            needMode={filter === 'need'}
+                            locked={screenLocked}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
         )}
       </main>
 
