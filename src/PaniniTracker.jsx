@@ -1688,13 +1688,14 @@ function PackMode({ album, collection, onAdd, onClose }) {
 
 function WelcomeModal({ onClose }) {
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/80 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-stone-900/80 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="paper border-4 border-stone-900 sticker-shadow w-full max-w-2xl my-8 flex flex-col"
+        className="paper border-4 border-stone-900 sticker-shadow w-full max-w-2xl flex flex-col"
+        style={{ maxHeight: '90vh' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-stone-900 text-amber-400 px-5 py-4 flex items-center justify-between sticky top-0">
+        {/* Header — fixed at top of modal */}
+        <div className="bg-stone-900 text-amber-400 px-5 py-4 flex items-center justify-between flex-shrink-0">
           <div>
             <div className="display text-2xl leading-none">HOW TO USE</div>
             <div className="mono text-[10px] text-stone-400 mt-0.5">Quick guide to The Sticker</div>
@@ -1704,8 +1705,8 @@ function WelcomeModal({ onClose }) {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-5 serif text-stone-800 text-sm leading-relaxed">
+        {/* Body — only this scrolls */}
+        <div className="p-6 space-y-5 serif text-stone-800 text-sm leading-relaxed overflow-y-auto flex-1">
 
           <section>
             <h3 className="display text-lg text-red-700 mb-1">The basics</h3>
@@ -1796,7 +1797,7 @@ function WelcomeModal({ onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="border-t-2 border-stone-900 paper p-4 flex justify-end sticky bottom-0">
+        <div className="border-t-2 border-stone-900 paper p-4 flex justify-end flex-shrink-0">
           <button
             onClick={onClose}
             className="mono text-sm uppercase px-6 py-2 bg-stone-900 text-amber-400 hover:bg-red-700 transition-colors"
