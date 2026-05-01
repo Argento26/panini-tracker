@@ -1718,12 +1718,29 @@ function WelcomeModal({ onClose }) {
 
           <section>
             <h3 className="display text-lg text-red-700 mb-1">Logging stickers</h3>
-            <p className="mb-2"><strong>Three ways to add a sticker:</strong></p>
+            <p className="mb-2"><strong>Two ways to add a sticker:</strong></p>
             <ul className="space-y-1.5 ml-4 list-disc">
               <li><strong>Tap +</strong> next to any sticker you have. Tap again if you got a duplicate.</li>
               <li><strong>Long-press</strong> a sticker (or right-click on desktop) to remove one — handy if you tapped by mistake.</li>
-              <li><strong>Open Pack mode</strong> (the amber button up top) — when you tear open a fresh pack, type each sticker code (like <span className="mono bg-stone-200 px-1">BRA5</span>) and it auto-detects new vs. duplicates.</li>
             </ul>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">Open Pack — the fastest way to log</h3>
+            <p className="mb-2">
+              When you tear open a fresh pack of stickers, tap the amber <strong>Open Pack</strong> button at the top. A focused screen appears with one big input field.
+            </p>
+            <p className="mb-2">
+              Type each sticker code from your pack (like <span className="mono bg-stone-200 px-1">BRA5</span>, <span className="mono bg-stone-200 px-1">ARG12</span>, <span className="mono bg-stone-200 px-1">FWC3</span>) and hit enter or the Add button. Each one logs instantly, and the screen shows you a running tally:
+            </p>
+            <ul className="space-y-1 ml-4 list-disc">
+              <li><strong>NEW</strong> — stickers you didn't have yet (green)</li>
+              <li><strong>DUPES</strong> — ones you already had (orange)</li>
+              <li><strong>UNKNOWN</strong> — codes that don't match any sticker (in case you typo)</li>
+            </ul>
+            <p className="mt-2 text-stone-700 italic">
+              Way faster than scrolling through the album to find each sticker. A 5-sticker pack takes about 20 seconds.
+            </p>
           </section>
 
           <section>
