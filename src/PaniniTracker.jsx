@@ -130,6 +130,14 @@ export default function PaniniTracker() {
   // Pack opening mode
   const [packMode, setPackMode] = useState(false);
 
+  // Screen lock — prevents accidental taps when showing the album to others
+  const [screenLocked, setScreenLocked] = useState(false);
+
+  // Version detection
+  const [appVersion, setAppVersion] = useState(null); // hash of the loaded JS bundle
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+
   // Timeline: array of { stickerId, ts } — appended whenever a sticker first goes from 0 → 1
   const [timeline, setTimeline] = useState([]);
 
@@ -171,6 +179,12 @@ export default function PaniniTracker() {
         if (res?.value) setReservations(JSON.parse(res.value));
       } catch (e) {
         // No reservations yet
+      }
+      try {
+        const lk = await storage.get('panini-wc-2026-locked');
+        if (lk?.value) setScreenLocked(JSON.parse(lk.value));
+      } catch (e) {
+        // No lock state yet
       } finally {
         setLoading(false);
       }
@@ -188,6 +202,87 @@ export default function PaniniTracker() {
     if (loading) return;
     storage.set('panini-wc-2026-reservations', JSON.stringify(reservations)).catch(() => {});
   }, [reservations, loading]);
+
+  // Persist screen lock state
+  useEffect(() => {
+    if (loading) return;
+    storage.set('panini-wc-2026-locked', JSON.stringify(screenLocked)).catch(() => {});
+  }, [screenLocked, loading]);
+
+  // Version detection: capture the hash of the currently-loaded JS bundle
+  // and periodically compare against /index.html to detect new deployments.
+  useEffect(() => {
+    if (loading) return;
+
+    // Helper: extract the JS bundle hash from any HTML string
+    const extractBundleHash = (html) => {
+      const match = html.match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/);
+      return match ? match[1] : null;
+    };
+
+    // Get the hash of the currently-loaded bundle by reading the script tag from the DOM
+    const getCurrentHash = () => {
+      const scripts = document.querySelectorAll('script[src*="/assets/index-"]');
+      for (const s of scripts) {
+        const m = s.src.match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/);
+        if (m) return m[1];
+      }
+      return null;
+    };
+
+    const currentHash = getCurrentHash();
+    setAppVersion(currentHash);
+
+    // Skip checks when running locally (no hash) or unable to parse
+    if (!currentHash) return;
+
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch('/index.html', { cache: 'no-store' });
+        if (!res.ok) return;
+        const html = await res.text();
+        const liveHash = extractBundleHash(html);
+        if (cancelled) return;
+        if (liveHash && liveHash !== currentHash) {
+          setUpdateAvailable(true);
+        }
+      } catch {
+        // Network error, ignore
+      }
+    };
+
+    // Check immediately on load and every 5 minutes after
+    check();
+    const interval = setInterval(check, 5 * 60 * 1000);
+    // Also check when the tab regains focus
+    const onFocus = () => check();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [loading]);
+
+  // Welcome screen: shown once on first ever open
+  useEffect(() => {
+    if (loading) return;
+    (async () => {
+      try {
+        const seen = await storage.get('panini-wc-2026-welcomed');
+        if (!seen?.value) setShowWelcome(true);
+      } catch {
+        setShowWelcome(true);
+      }
+    })();
+  }, [loading]);
+
+  const dismissWelcome = async () => {
+    setShowWelcome(false);
+    await storage.set('panini-wc-2026-welcomed', '1').catch(() => {});
+  };
 
   // Sync collection to shared group storage whenever it changes (debounced)
   useEffect(() => {
@@ -478,6 +573,32 @@ export default function PaniniTracker() {
         </div>
       </div>
 
+      {/* UPDATE AVAILABLE BANNER */}
+      {updateAvailable && (
+        <div className="bg-emerald-600 border-b-2 border-stone-900 py-2 px-4 flex items-center justify-center gap-3 mono text-[11px] uppercase tracking-wider text-white font-bold">
+          <span>🆕 New version available</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1 bg-white text-emerald-700 hover:bg-stone-100 transition-colors"
+          >
+            Reload
+          </button>
+        </div>
+      )}
+
+      {/* LOCKED BANNER */}
+      {screenLocked && (
+        <div className="bg-amber-400 border-b-2 border-stone-900 py-1.5 px-4 flex items-center justify-center gap-2 mono text-[11px] uppercase tracking-wider text-stone-900 font-bold">
+          <Lock size={12} /> Screen locked — taps disabled
+          <button
+            onClick={() => setScreenLocked(false)}
+            className="ml-2 underline hover:no-underline"
+          >
+            Unlock
+          </button>
+        </div>
+      )}
+
       {/* VIEW TABS */}
       <div className="paper border-b-2 border-stone-900">
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between flex-wrap">
@@ -594,10 +715,20 @@ export default function PaniniTracker() {
           </div>
           <button
             onClick={() => setPackMode(true)}
-            className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-amber-400 hover:bg-amber-300 flex items-center gap-1 font-bold"
+            disabled={screenLocked}
+            className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-amber-400 hover:bg-amber-300 flex items-center gap-1 font-bold disabled:opacity-30 disabled:cursor-not-allowed"
             title="Quickly log stickers from a new pack"
           >
             <Package size={12} /> Open Pack
+          </button>
+          <button
+            onClick={() => setScreenLocked(l => !l)}
+            className={`mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 flex items-center gap-1 transition-colors ${
+              screenLocked ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 hover:bg-stone-200'
+            }`}
+            title={screenLocked ? 'Tap to unlock taps' : 'Lock taps to prevent accidents'}
+          >
+            <Lock size={12} /> {screenLocked ? 'Locked' : 'Lock'}
           </button>
         </div>
       </div>
@@ -676,6 +807,7 @@ export default function PaniniTracker() {
                 onAdd={() => updateCount(sticker.id, 1)}
                 onRemove={() => updateCount(sticker.id, -1)}
                 needMode={filter === 'need'}
+                locked={screenLocked}
               />
             ))}
           </div>
@@ -686,10 +818,27 @@ export default function PaniniTracker() {
 
       {/* FOOTER */}
       <footer className="border-t-4 border-stone-900 paper py-6">
-        <div className="max-w-6xl mx-auto px-6 text-center mono text-xs text-stone-600">
-          UNOFFICIAL TRACKER · NOT AFFILIATED WITH PANINI OR FIFA · YOUR COLLECTION IS PRIVATE · GROUP DATA IS SHARED WITH ANYONE USING YOUR GROUP CODE
+        <div className="max-w-6xl mx-auto px-6 text-center mono text-xs text-stone-600 space-y-2">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => setShowWelcome(true)}
+              className="underline hover:text-stone-900"
+            >
+              Help / How to use
+            </button>
+            <span className="text-stone-400">·</span>
+            <span className="text-[10px] text-stone-500">
+              Version {appVersion ? appVersion.slice(0, 7) : 'dev'}
+            </span>
+          </div>
+          <div>
+            UNOFFICIAL TRACKER · NOT AFFILIATED WITH PANINI OR FIFA · YOUR COLLECTION IS PRIVATE · GROUP DATA IS SHARED WITH ANYONE USING YOUR GROUP CODE
+          </div>
         </div>
       </footer>
+
+      {/* WELCOME / HELP MODAL */}
+      {showWelcome && <WelcomeModal onClose={dismissWelcome} />}
     </div>
   );
 }
@@ -744,17 +893,61 @@ function TeamButton({ code, name, color, flag, active, onClick, stats }) {
   );
 }
 
-function StickerCard({ sticker, count, onAdd, onRemove, needMode }) {
+function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked }) {
   const got = count > 0;
   const dupes = count > 1;
   const dupeCount = Math.max(0, count - 1);
+  const longPressTimer = useRef(null);
+  const longPressFired = useRef(false);
 
   let bgClass = 'bg-stone-50 border-stone-300';
   if (dupes) bgClass = 'dupe-sticker';
   else if (got) bgClass = 'got-sticker';
 
+  // Long-press handlers (works for both touch and mouse)
+  const startLongPress = () => {
+    if (locked) return;
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      if (count > 0) {
+        onRemove();
+        longPressFired.current = true;
+        // Haptic feedback if available
+        if (navigator.vibrate) navigator.vibrate(40);
+      }
+    }, 500); // 500ms hold
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleClick = (handler) => (e) => {
+    // If long-press fired, ignore the click that follows
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      e.preventDefault();
+      return;
+    }
+    if (locked) return;
+    handler();
+  };
+
+  // Right-click on desktop = remove
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    if (locked) return;
+    if (count > 0) onRemove();
+  };
+
   return (
-    <div className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass}`}>
+    <div
+      className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass} ${locked ? 'opacity-90' : ''} select-none`}
+      onContextMenu={handleContextMenu}
+    >
       {/* Sticker number badge */}
       <div className="absolute -top-2 -left-2 bg-stone-900 text-amber-400 mono text-[10px] px-1.5 py-0.5 border border-stone-900">
         {sticker.id}
@@ -788,27 +981,51 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode }) {
       {/* Action area — single button in needMode, +/- counter otherwise */}
       {needMode ? (
         <button
-          onClick={onAdd}
-          className="w-full mt-3 px-2 py-2 bg-emerald-700 hover:bg-emerald-600 text-white mono text-[11px] uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1"
+          onClick={handleClick(onAdd)}
+          onTouchStart={startLongPress}
+          onTouchEnd={cancelLongPress}
+          onTouchCancel={cancelLongPress}
+          onMouseDown={startLongPress}
+          onMouseUp={cancelLongPress}
+          onMouseLeave={cancelLongPress}
+          disabled={locked}
+          className="w-full mt-3 px-2 py-2 bg-emerald-700 hover:bg-emerald-600 text-white mono text-[11px] uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Check size={14} /> I got it!
         </button>
       ) : (
         <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-400/40">
           <button
-            onClick={onRemove}
-            disabled={count === 0}
+            onClick={handleClick(onRemove)}
+            disabled={count === 0 || locked}
             className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-700 transition-colors"
           >
             <Minus size={14} />
           </button>
-          <div className="display text-2xl text-stone-900">
+          <div
+            className="display text-2xl text-stone-900 select-none cursor-pointer"
+            onClick={handleClick(onAdd)}
+            onTouchStart={startLongPress}
+            onTouchEnd={cancelLongPress}
+            onTouchCancel={cancelLongPress}
+            onMouseDown={startLongPress}
+            onMouseUp={cancelLongPress}
+            onMouseLeave={cancelLongPress}
+            title="Tap to add, long-press to remove"
+          >
             {count}
             {dupes && <span className="text-orange-700 text-xs ml-1">+{dupeCount}</span>}
           </div>
           <button
-            onClick={onAdd}
-            className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 hover:bg-emerald-700 transition-colors"
+            onClick={handleClick(onAdd)}
+            onTouchStart={startLongPress}
+            onTouchEnd={cancelLongPress}
+            onTouchCancel={cancelLongPress}
+            onMouseDown={startLongPress}
+            onMouseUp={cancelLongPress}
+            onMouseLeave={cancelLongPress}
+            disabled={locked}
+            className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 hover:bg-emerald-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Plus size={14} />
           </button>
@@ -1460,6 +1677,116 @@ function PackMode({ album, collection, onAdd, onClose }) {
             className="mono text-xs uppercase px-4 py-2 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200"
           >
             Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// WELCOME / HELP MODAL — shown once on first open, accessible via footer link
+// ============================================================================
+
+function WelcomeModal({ onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-900/80 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="paper border-4 border-stone-900 sticker-shadow w-full max-w-2xl my-8 flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-stone-900 text-amber-400 px-5 py-4 flex items-center justify-between sticky top-0">
+          <div>
+            <div className="display text-2xl leading-none">HOW TO USE</div>
+            <div className="mono text-[10px] text-stone-400 mt-0.5">Quick guide to The Sticker</div>
+          </div>
+          <button onClick={onClose} className="text-amber-400 hover:text-white" aria-label="Close">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-5 serif text-stone-800 text-sm leading-relaxed">
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">The basics</h3>
+            <p>
+              This app tracks your Panini WC 2026 album so you can see what you have, what you need, and trade duplicates with friends in your group.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">Logging stickers</h3>
+            <p className="mb-2"><strong>Three ways to add a sticker:</strong></p>
+            <ul className="space-y-1.5 ml-4 list-disc">
+              <li><strong>Tap +</strong> next to any sticker you have. Tap again if you got a duplicate.</li>
+              <li><strong>Long-press</strong> a sticker (or right-click on desktop) to remove one — handy if you tapped by mistake.</li>
+              <li><strong>Open Pack mode</strong> (the amber button up top) — when you tear open a fresh pack, type each sticker code (like <span className="mono bg-stone-200 px-1">BRA5</span>) and it auto-detects new vs. duplicates.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">Filters</h3>
+            <p>The chips below the search bar let you focus the view:</p>
+            <ul className="space-y-1 ml-4 list-disc mt-1">
+              <li><strong>All</strong> — the entire 980-sticker album</li>
+              <li><strong>Got</strong> — only the ones you already have</li>
+              <li><strong>Need</strong> — what's still missing (with a big "I got it!" button per sticker)</li>
+              <li><strong>Dupes</strong> — your tradeable extras (count ≥ 2)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">The Group tab — where the magic is</h3>
+            <p className="mb-2">
+              Enter your name + the shared group code your friends sent you. Once you're in, two things appear:
+            </p>
+            <ul className="space-y-1.5 ml-4 list-disc">
+              <li><strong>Leaderboard</strong> — who's closest to completing the album</li>
+              <li><strong>Trade Board</strong> — automatically shows which friends have duplicates of stickers you need, and vice versa. Tap a duplicate you're offering to <strong>reserve it</strong> for that specific friend, so you don't accidentally promise the same one to two people.</li>
+            </ul>
+            <p className="mt-2 text-stone-700 italic">
+              Everything syncs in real time. When a friend logs a new sticker, you see it within a second.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">Stats tab</h3>
+            <p>
+              Your progress over time, completion percentage by team, and pace stats — useful to see which teams you're closest to finishing.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">Other useful buttons</h3>
+            <ul className="space-y-1.5 ml-4 list-disc">
+              <li><strong>Share Needs</strong> (top right) — texts yourself or shares a clean list of missing stickers, perfect for trading with people outside your group.</li>
+              <li><strong>Lock</strong> — disables all taps. Use this when you hand your phone to someone to look at the album without them accidentally changing things.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="display text-lg text-red-700 mb-1">When new versions come out</h3>
+            <p>
+              If the developer (that's you, or your friend who made this) ships an update, you'll see a green <strong>"🆕 New version available"</strong> banner at the top. Tap <strong>Reload</strong> and you're on the latest version.
+            </p>
+          </section>
+
+          <section className="border-t-2 border-stone-300 pt-4">
+            <p className="text-stone-600 text-xs">
+              💡 You can revisit this guide anytime from the <strong>Help / How to use</strong> link at the bottom of the page.
+            </p>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t-2 border-stone-900 paper p-4 flex justify-end sticky bottom-0">
+          <button
+            onClick={onClose}
+            className="mono text-sm uppercase px-6 py-2 bg-stone-900 text-amber-400 hover:bg-red-700 transition-colors"
+          >
+            Got it!
           </button>
         </div>
       </div>
