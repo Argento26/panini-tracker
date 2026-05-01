@@ -839,18 +839,23 @@ export default function PaniniTracker() {
                   const sectionGotInAlbum = ALBUM.filter(s => s.section === g.section && collection[s.id] > 0).length;
                   return (
                     <div key={g.section}>
-                      {/* Section header */}
-                      <div className="mb-3 flex items-center gap-2">
-                        {teamMeta?.color && (
-                          <div className="w-1.5 h-7 flex-shrink-0" style={{ backgroundColor: teamMeta.color }} />
-                        )}
-                        {teamMeta?.flag && <span className="text-xl flex-shrink-0">{teamMeta.flag}</span>}
-                        {teamMeta && (
-                          <span className="mono text-xs font-bold text-stone-900 tracking-wider">{teamMeta.code}</span>
-                        )}
-                        <span className="display text-xl text-stone-900 truncate">{g.section.toUpperCase()}</span>
-                        <div className="flex-1 border-b border-dashed border-stone-400" />
-                        <span className="mono text-[10px] text-stone-600 flex-shrink-0">{sectionGotInAlbum}/{sectionTotalInAlbum}</span>
+                      {/* Sticky section header */}
+                      <div
+                        className="paper sticky z-10 -mx-6 px-6 py-2 mb-3 border-b border-stone-300"
+                        style={{ top: '56px' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          {teamMeta?.color && (
+                            <div className="w-1.5 h-7 flex-shrink-0" style={{ backgroundColor: teamMeta.color }} />
+                          )}
+                          {teamMeta?.flag && <span className="text-xl flex-shrink-0">{teamMeta.flag}</span>}
+                          {teamMeta && (
+                            <span className="mono text-xs font-bold text-stone-900 tracking-wider">{teamMeta.code}</span>
+                          )}
+                          <span className="display text-xl text-stone-900 truncate">{g.section.toUpperCase()}</span>
+                          <div className="flex-1 border-b border-dashed border-stone-400" />
+                          <span className="mono text-[10px] text-stone-600 flex-shrink-0">{sectionGotInAlbum}/{sectionTotalInAlbum}</span>
+                        </div>
                       </div>
                       {/* Sticker grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
