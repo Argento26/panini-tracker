@@ -288,14 +288,33 @@ export default function PaniniTracker() {
   };
 
   // Track scroll position to show/hide "back to top" button
+  const scrollingToTop = useRef(false);
   useEffect(() => {
     const onScroll = () => {
+      // Don't hide the button while we're animating to top — wait until we arrive
+      if (scrollingToTop.current) {
+        if (window.scrollY <= 10) {
+          scrollingToTop.current = false;
+          setShowScrollTop(false);
+        }
+        return;
+      }
       setShowScrollTop(window.scrollY > 400);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  const scrollToTop = () => {
+    scrollingToTop.current = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Safety: clear the flag after 2s in case smooth scroll doesn't fire scroll events to <= 10
+    setTimeout(() => {
+      scrollingToTop.current = false;
+      if (window.scrollY <= 400) setShowScrollTop(false);
+    }, 2000);
+  };
 
   // Sync collection to shared group storage whenever it changes (debounced)
   useEffect(() => {
@@ -899,7 +918,7 @@ export default function PaniniTracker() {
 
       {/* BACK TO TOP BUTTON */}
       <button
-        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        onClick={scrollToTop}
         aria-label="Back to top"
         className={`fixed bottom-5 right-5 z-40 w-12 h-12 bg-stone-900 text-amber-400 border-2 border-stone-900 sticker-shadow flex items-center justify-center transition-all duration-300 hover:bg-red-700 ${
           showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
@@ -965,57 +984,13 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked }) {
   const got = count > 0;
   const dupes = count > 1;
   const dupeCount = Math.max(0, count - 1);
-  const longPressTimer = useRef(null);
-  const longPressFired = useRef(false);
 
   let bgClass = 'bg-stone-50 border-stone-300';
   if (dupes) bgClass = 'dupe-sticker';
   else if (got) bgClass = 'got-sticker';
 
-  // Long-press handlers (works for both touch and mouse)
-  const startLongPress = () => {
-    if (locked) return;
-    longPressFired.current = false;
-    longPressTimer.current = setTimeout(() => {
-      if (count > 0) {
-        onRemove();
-        longPressFired.current = true;
-        // Haptic feedback if available
-        if (navigator.vibrate) navigator.vibrate(40);
-      }
-    }, 500); // 500ms hold
-  };
-
-  const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handleClick = (handler) => (e) => {
-    // If long-press fired, ignore the click that follows
-    if (longPressFired.current) {
-      longPressFired.current = false;
-      e.preventDefault();
-      return;
-    }
-    if (locked) return;
-    handler();
-  };
-
-  // Right-click on desktop = remove
-  const handleContextMenu = (e) => {
-    e.preventDefault();
-    if (locked) return;
-    if (count > 0) onRemove();
-  };
-
   return (
-    <div
-      className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass} ${locked ? 'opacity-90' : ''} select-none`}
-      onContextMenu={handleContextMenu}
-    >
+    <div className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass} ${locked ? 'opacity-90' : ''}`}>
       {/* Sticker number badge */}
       <div className="absolute -top-2 -left-2 bg-stone-900 text-amber-400 mono text-[10px] px-1.5 py-0.5 border border-stone-900">
         {sticker.id}
@@ -1049,13 +1024,7 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked }) {
       {/* Action area — single button in needMode, +/- counter otherwise */}
       {needMode ? (
         <button
-          onClick={handleClick(onAdd)}
-          onTouchStart={startLongPress}
-          onTouchEnd={cancelLongPress}
-          onTouchCancel={cancelLongPress}
-          onMouseDown={startLongPress}
-          onMouseUp={cancelLongPress}
-          onMouseLeave={cancelLongPress}
+          onClick={onAdd}
           disabled={locked}
           className="w-full mt-3 px-2 py-2 bg-emerald-700 hover:bg-emerald-600 text-white mono text-[11px] uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -1064,34 +1033,18 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked }) {
       ) : (
         <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-400/40">
           <button
-            onClick={handleClick(onRemove)}
+            onClick={onRemove}
             disabled={count === 0 || locked}
             className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-700 transition-colors"
           >
             <Minus size={14} />
           </button>
-          <div
-            className="display text-2xl text-stone-900 select-none cursor-pointer"
-            onClick={handleClick(onAdd)}
-            onTouchStart={startLongPress}
-            onTouchEnd={cancelLongPress}
-            onTouchCancel={cancelLongPress}
-            onMouseDown={startLongPress}
-            onMouseUp={cancelLongPress}
-            onMouseLeave={cancelLongPress}
-            title="Tap to add, long-press to remove"
-          >
+          <div className="display text-2xl text-stone-900">
             {count}
             {dupes && <span className="text-orange-700 text-xs ml-1">+{dupeCount}</span>}
           </div>
           <button
-            onClick={handleClick(onAdd)}
-            onTouchStart={startLongPress}
-            onTouchEnd={cancelLongPress}
-            onTouchCancel={cancelLongPress}
-            onMouseDown={startLongPress}
-            onMouseUp={cancelLongPress}
-            onMouseLeave={cancelLongPress}
+            onClick={onAdd}
             disabled={locked}
             className="w-7 h-7 flex items-center justify-center bg-stone-900 text-stone-50 hover:bg-emerald-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
@@ -1621,8 +1574,12 @@ function PackMode({ album, collection, onAdd, onClose }) {
   }, []);
 
   const submit = () => {
-    const id = input.trim().toUpperCase();
-    if (!id) return;
+    // Strip anything that isn't alphanumeric, then uppercase
+    const id = input.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (!id) {
+      setInput('');
+      return;
+    }
 
     const sticker = stickerMap[id];
     if (!sticker) {
@@ -1669,12 +1626,16 @@ function PackMode({ album, collection, onAdd, onClose }) {
             ref={inputRef}
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value.toUpperCase())}
+            onChange={(e) => setInput(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
             onKeyDown={handleKey}
             placeholder="e.g. BRA5"
             autoCapitalize="characters"
             autoCorrect="off"
+            autoComplete="off"
             spellCheck="false"
+            inputMode="text"
+            name="sticker-code"
+            enterKeyHint="enter"
             className="w-full px-4 py-4 bg-stone-50 border-2 border-stone-900 mono text-3xl font-bold text-center focus:outline-none focus:border-red-700 tracking-widest"
           />
           <button
@@ -1787,10 +1748,10 @@ function WelcomeModal({ onClose }) {
 
           <section>
             <h3 className="display text-lg text-red-700 mb-1">Logging stickers</h3>
-            <p className="mb-2"><strong>Two ways to add a sticker:</strong></p>
+            <p className="mb-2"><strong>Adding and removing:</strong></p>
             <ul className="space-y-1.5 ml-4 list-disc">
               <li><strong>Tap +</strong> next to any sticker you have. Tap again if you got a duplicate.</li>
-              <li><strong>Long-press</strong> a sticker (or right-click on desktop) to remove one — handy if you tapped by mistake.</li>
+              <li><strong>Tap −</strong> to remove one — handy if you tapped + by mistake.</li>
             </ul>
           </section>
 
