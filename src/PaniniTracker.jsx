@@ -141,6 +141,9 @@ export default function PaniniTracker() {
   // Show "back to top" button after scrolling down
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // Sticker to highlight after a search jump
+  const [highlightedSticker, setHighlightedSticker] = useState(null);
+
   // Timeline: array of { stickerId, ts } — appended whenever a sticker first goes from 0 → 1
   const [timeline, setTimeline] = useState([]);
 
@@ -443,6 +446,38 @@ export default function PaniniTracker() {
     return list;
   }, [activeTeam, search, filter, collection]);
 
+  // Jump to the first sticker matching the current search
+  const jumpToSearchResult = () => {
+    if (!search.trim()) return;
+    // If filtered to a specific team, broaden to ALL so the match is visible
+    if (activeTeam !== 'ALL') setActiveTeam('ALL');
+    // Use the first visible sticker as the target. If filter excludes all matches, fall back to ALL filter.
+    let target = visibleStickers[0];
+    if (!target) {
+      // Search across full album
+      const q = search.toLowerCase();
+      target = ALBUM.find(s =>
+        s.id.toLowerCase().includes(q) ||
+        s.label.toLowerCase().includes(q) ||
+        s.section.toLowerCase().includes(q)
+      );
+      if (target) {
+        setFilter('all'); // ensure visible
+      }
+    }
+    if (!target) return;
+    setHighlightedSticker(target.id);
+    // Wait one frame for filter changes / re-render, then scroll
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`sticker-${target.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    // Clear highlight after the pulse animation finishes
+    setTimeout(() => setHighlightedSticker(null), 3000);
+  };
+
   // Export / Import
   const exportData = () => {
     const blob = new Blob([JSON.stringify(collection, null, 2)], { type: 'application/json' });
@@ -558,12 +593,39 @@ export default function PaniniTracker() {
           background: linear-gradient(135deg, #fed7aa 0%, #fb923c 100%);
           border-color: #9a3412;
         }
+        /* Sticker-pack button style: chunky border, layered shadow, playful active state */
+        .btn-sticker {
+          border: 2px solid #1c1917;
+          box-shadow: 3px 3px 0 #1c1917;
+          transition: transform 120ms ease, box-shadow 120ms ease;
+          font-weight: bold;
+        }
+        .btn-sticker:hover {
+          transform: translate(-1px, -1px) rotate(-1deg);
+          box-shadow: 4px 4px 0 #1c1917;
+        }
+        .btn-sticker:active:not(:disabled) {
+          transform: translate(2px, 2px);
+          box-shadow: 1px 1px 0 #1c1917;
+        }
+        .btn-sticker:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+          box-shadow: 2px 2px 0 #1c1917;
+        }
         @keyframes stamp {
           0% { transform: scale(1.5) rotate(-12deg); opacity: 0; }
           60% { transform: scale(0.95) rotate(-12deg); opacity: 1; }
           100% { transform: scale(1) rotate(-12deg); opacity: 1; }
         }
         .stamp-anim { animation: stamp 0.4s ease-out; }
+        /* Search-jump highlight pulse */
+        @keyframes searchPulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,38,38, 0.6); }
+          50% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(220,38,38, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,38,38, 0); }
+        }
+        .search-pulse { animation: searchPulse 1.4s ease-out 2; }
       `}</style>
 
       {/* UNIFIED HEADER — masthead + stats in one band */}
@@ -578,23 +640,23 @@ export default function PaniniTracker() {
             <img
               src="/icon-192.png"
               alt=""
-              className="w-14 h-14 sm:w-16 sm:h-16 border-2 border-stone-900 sticker-shadow flex-shrink-0"
+              className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-stone-900 sticker-shadow flex-shrink-0"
             />
 
             {/* Title block */}
             <div className="flex-1 min-w-0">
-              <div className="mono text-[9px] sm:text-[10px] text-stone-600 leading-none tracking-wider">
+              <div className="mono text-[10px] sm:text-[11px] text-stone-600 leading-none tracking-wider">
                 VOL. 26 · USA · CAN · MEX
               </div>
-              <h1 className="display text-3xl sm:text-4xl text-stone-900 leading-none mt-0.5">
+              <h1 className="display text-4xl sm:text-5xl text-stone-900 leading-none mt-1">
                 THE STICKER<span className="text-red-700">.</span>
               </h1>
               {profile ? (
-                <p className="serif text-stone-700 mt-1 text-xs sm:text-sm truncate">
+                <p className="serif text-stone-700 mt-1.5 text-sm sm:text-base truncate">
                   Hello, <span className="font-bold text-stone-900">{profile.name.split(' ')[0]}</span>
                 </p>
               ) : (
-                <p className="serif italic text-stone-600 mt-1 text-[11px] sm:text-xs hidden sm:block">
+                <p className="serif italic text-stone-600 mt-1.5 text-xs sm:text-sm hidden sm:block">
                   Your 2026 FIFA World Cup companion
                 </p>
               )}
@@ -602,10 +664,10 @@ export default function PaniniTracker() {
 
             {/* Right side: percentage + mini stats */}
             <div className="text-right flex-shrink-0">
-              <div className="display text-4xl sm:text-5xl text-red-700 leading-none">
-                {stats.pct}<span className="text-xl sm:text-2xl">%</span>
+              <div className="display text-5xl sm:text-6xl text-red-700 leading-none">
+                {stats.pct}<span className="text-2xl sm:text-3xl">%</span>
               </div>
-              <div className="mono text-[9px] sm:text-[10px] text-stone-600 mt-1 tracking-wider">
+              <div className="mono text-[10px] sm:text-[11px] text-stone-600 mt-1 tracking-wider">
                 {stats.got}/{stats.total}
               </div>
             </div>
@@ -658,44 +720,33 @@ export default function PaniniTracker() {
 
       {/* VIEW TABS */}
       <div className="paper border-b-2 border-stone-900">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between flex-wrap">
-          <div className="flex">
-            <button
-              onClick={() => setView('album')}
-              className={`px-4 py-3 mono text-xs uppercase tracking-wider border-r-2 border-stone-900 transition-colors ${
-                view === 'album' ? 'bg-stone-900 text-amber-400' : 'text-stone-700 hover:bg-stone-200'
-              }`}
-            >
-              <span className="flex items-center gap-2"><Sticker size={14} /> Album</span>
-            </button>
-            <button
-              onClick={() => setView('stats')}
-              className={`px-4 py-3 mono text-xs uppercase tracking-wider border-r-2 border-stone-900 transition-colors ${
-                view === 'stats' ? 'bg-stone-900 text-amber-400' : 'text-stone-700 hover:bg-stone-200'
-              }`}
-            >
-              <span className="flex items-center gap-2"><BarChart3 size={14} /> Stats</span>
-            </button>
-            <button
-              onClick={() => setView('group')}
-              className={`px-4 py-3 mono text-xs uppercase tracking-wider border-r-2 border-stone-900 transition-colors ${
-                view === 'group' ? 'bg-stone-900 text-amber-400' : 'text-stone-700 hover:bg-stone-200'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <UsersRound size={14} /> Group {profile && <span className="text-red-700 font-bold hidden sm:inline">· {profile.groupCode}</span>}
-              </span>
-            </button>
-          </div>
-          <div className="flex items-center gap-3 py-2">
-            <button
-              onClick={shareNeeds}
-              className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex items-center gap-1"
-              title="Share my needs list"
-            >
-              <Share2 size={12} /> Share Needs
-            </button>
-          </div>
+        <div className="max-w-6xl mx-auto flex">
+          <button
+            onClick={() => setView('album')}
+            className={`flex-1 px-2 py-3 mono text-xs sm:text-sm uppercase tracking-wider border-r-2 border-stone-900 transition-colors ${
+              view === 'album' ? 'bg-stone-900 text-amber-400' : 'text-stone-700 hover:bg-stone-200'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2"><Sticker size={14} /> Album</span>
+          </button>
+          <button
+            onClick={() => setView('stats')}
+            className={`flex-1 px-2 py-3 mono text-xs sm:text-sm uppercase tracking-wider border-r-2 border-stone-900 transition-colors ${
+              view === 'stats' ? 'bg-stone-900 text-amber-400' : 'text-stone-700 hover:bg-stone-200'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2"><BarChart3 size={14} /> Stats</span>
+          </button>
+          <button
+            onClick={() => setView('group')}
+            className={`flex-1 px-2 py-3 mono text-xs sm:text-sm uppercase tracking-wider transition-colors ${
+              view === 'group' ? 'bg-stone-900 text-amber-400' : 'text-stone-700 hover:bg-stone-200'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <UsersRound size={14} /> Group {profile && <span className="text-red-700 font-bold hidden md:inline">· {profile.groupCode}</span>}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -750,34 +801,48 @@ export default function PaniniTracker() {
               placeholder="Search stickers, players, teams…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') jumpToSearchResult(); }}
               className="w-full pl-9 pr-3 py-2 bg-stone-50 border-2 border-stone-900 mono text-sm focus:outline-none focus:border-red-700"
             />
           </div>
-          <div className="flex gap-1 border-2 border-stone-900">
-            {['all', 'got', 'need', 'dupes'].map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 mono text-xs uppercase transition-colors ${
-                  filter === f ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-700 hover:bg-stone-200'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="flex gap-2">
+            {['all', 'got', 'need', 'dupes'].map(f => {
+              const colors = {
+                all:   filter === 'all'   ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900',
+                got:   filter === 'got'   ? 'bg-amber-400 text-stone-900' : 'bg-stone-50 text-stone-900',
+                need:  filter === 'need'  ? 'bg-red-400 text-stone-900'   : 'bg-stone-50 text-stone-900',
+                dupes: filter === 'dupes' ? 'bg-orange-400 text-stone-900': 'bg-stone-50 text-stone-900',
+              };
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`btn-sticker px-3 py-1.5 mono text-xs uppercase ${colors[f]}`}
+                >
+                  {f}
+                </button>
+              );
+            })}
           </div>
           <button
             onClick={() => setPackMode(true)}
             disabled={screenLocked}
-            className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-amber-400 hover:bg-amber-300 flex items-center gap-1 font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+            className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-amber-400 text-stone-900 flex items-center gap-1"
             title="Quickly log stickers from a new pack"
           >
             <Package size={12} /> Open Pack
           </button>
           <button
+            onClick={shareNeeds}
+            className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-emerald-300 text-stone-900 flex items-center gap-1"
+            title="Share my needs list"
+          >
+            <Share2 size={12} /> Share Needs
+          </button>
+          <button
             onClick={() => setScreenLocked(l => !l)}
-            className={`mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 flex items-center gap-1 transition-colors ${
-              screenLocked ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 hover:bg-stone-200'
+            className={`btn-sticker mono text-xs uppercase px-3 py-1.5 flex items-center gap-1 ${
+              screenLocked ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900'
             }`}
             title={screenLocked ? 'Tap to unlock taps' : 'Lock taps to prevent accidents'}
           >
@@ -785,7 +850,7 @@ export default function PaniniTracker() {
           </button>
           <button
             onClick={() => setShowWelcome(true)}
-            className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex items-center gap-1"
+            className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-sky-200 text-stone-900 flex items-center gap-1"
             title="How to use this app"
           >
             <HelpCircle size={12} /> Help
@@ -908,6 +973,7 @@ export default function PaniniTracker() {
                             onRemove={() => updateCount(sticker.id, -1)}
                             needMode={filter === 'need'}
                             locked={screenLocked}
+                            highlighted={highlightedSticker === sticker.id}
                           />
                         ))}
                       </div>
@@ -958,11 +1024,11 @@ export default function PaniniTracker() {
 
 function MiniStat({ icon, label, value, color }) {
   return (
-    <div className="flex items-center gap-1.5 flex-1 justify-center">
+    <div className="flex items-center gap-2 flex-1 justify-center">
       <span className={color}>{icon}</span>
-      <div className="flex items-baseline gap-1">
-        <span className={`display text-xl sm:text-2xl ${color} leading-none`}>{value}</span>
-        <span className="mono text-[9px] text-stone-600 tracking-wider">{label}</span>
+      <div className="flex items-baseline gap-1.5">
+        <span className={`display text-2xl sm:text-3xl ${color} leading-none`}>{value}</span>
+        <span className="mono text-[10px] sm:text-[11px] text-stone-600 tracking-wider">{label}</span>
       </div>
     </div>
   );
@@ -1002,7 +1068,7 @@ function TeamButton({ code, name, color, flag, active, onClick, stats }) {
   );
 }
 
-function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked }) {
+function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked, highlighted }) {
   const got = count > 0;
   const dupes = count > 1;
   const dupeCount = Math.max(0, count - 1);
@@ -1012,7 +1078,10 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked }) {
   else if (got) bgClass = 'got-sticker';
 
   return (
-    <div className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass} ${locked ? 'opacity-90' : ''}`}>
+    <div
+      id={`sticker-${sticker.id}`}
+      className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass} ${locked ? 'opacity-90' : ''} ${highlighted ? 'search-pulse' : ''}`}
+    >
       {/* Sticker number badge */}
       <div className="absolute -top-2 -left-2 bg-stone-900 text-amber-400 mono text-[10px] px-1.5 py-0.5 border border-stone-900">
         {sticker.id}
