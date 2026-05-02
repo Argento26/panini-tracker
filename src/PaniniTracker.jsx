@@ -712,6 +712,7 @@ export default function PaniniTracker() {
           album={ALBUM}
           collection={collection}
           onAdd={(id) => updateCount(id, 1)}
+          onRemove={(id) => updateCount(id, -1)}
           onClose={() => setPackMode(false)}
         />
       )}
@@ -1557,7 +1558,7 @@ function StatsView({ collection, timeline, album, teams }) {
 // PACK MODE — quick batch entry of stickers from a freshly opened pack
 // ============================================================================
 
-function PackMode({ album, collection, onAdd, onClose }) {
+function PackMode({ album, collection, onAdd, onRemove, onClose }) {
   const [input, setInput] = useState('');
   const [batch, setBatch] = useState([]); // [{ id, label, status: 'new' | 'dupe' | 'invalid' }]
   const inputRef = useRef(null);
@@ -1599,8 +1600,15 @@ function PackMode({ album, collection, onAdd, onClose }) {
     if (e.key === 'Enter') submit();
   };
 
-  const newCount = batch.filter(b => b.status === 'new').length;
-  const dupeCount = batch.filter(b => b.status === 'dupe').length;
+  const undo = (index) => {
+    const entry = batch[index];
+    if (!entry || entry.undone || entry.status === 'invalid') return;
+    onRemove(entry.id);
+    setBatch(b => b.map((e, i) => i === index ? { ...e, undone: true } : e));
+  };
+
+  const newCount = batch.filter(b => b.status === 'new' && !b.undone).length;
+  const dupeCount = batch.filter(b => b.status === 'dupe' && !b.undone).length;
   const invalidCount = batch.filter(b => b.status === 'invalid').length;
 
   return (
@@ -1674,21 +1682,33 @@ function PackMode({ album, collection, onAdd, onClose }) {
                 {batch.map((b, i) => (
                   <div
                     key={i}
-                    className={`flex items-center gap-2 px-2 py-1.5 border-2 ${
+                    className={`flex items-center gap-2 px-2 py-1.5 border-2 transition-opacity ${
+                      b.undone ? 'bg-stone-100 border-stone-400 opacity-50' :
                       b.status === 'new' ? 'bg-emerald-50 border-emerald-700' :
                       b.status === 'dupe' ? 'bg-orange-50 border-orange-700' :
                       'bg-stone-100 border-stone-400'
                     }`}
                   >
-                    <span className="mono text-xs font-bold w-16">{b.id}</span>
-                    <span className="serif text-sm flex-1 truncate">{b.label}</span>
+                    <span className={`mono text-xs font-bold w-16 ${b.undone ? 'line-through' : ''}`}>{b.id}</span>
+                    <span className={`serif text-sm flex-1 truncate ${b.undone ? 'line-through' : ''}`}>{b.label}</span>
                     <span className={`mono text-[9px] uppercase ${
+                      b.undone ? 'text-stone-500' :
                       b.status === 'new' ? 'text-emerald-700' :
                       b.status === 'dupe' ? 'text-orange-700' :
                       'text-stone-500'
                     }`}>
-                      {b.status === 'new' ? '✓ Added' : b.status === 'dupe' ? '+1 Dupe' : '✗ Unknown'}
+                      {b.undone ? '↶ Undone' :
+                        b.status === 'new' ? '✓ Added' : b.status === 'dupe' ? '+1 Dupe' : '✗ Unknown'}
                     </span>
+                    {b.status !== 'invalid' && !b.undone && (
+                      <button
+                        onClick={() => undo(i)}
+                        className="mono text-[9px] uppercase px-2 py-0.5 border border-stone-700 bg-stone-50 hover:bg-red-100 hover:border-red-700 hover:text-red-700 transition-colors"
+                        title="Undo this entry"
+                      >
+                        Undo
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
