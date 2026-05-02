@@ -566,44 +566,66 @@ export default function PaniniTracker() {
         .stamp-anim { animation: stamp 0.4s ease-out; }
       `}</style>
 
-      {/* HEADER — magazine masthead style */}
+      {/* UNIFIED HEADER — masthead + stats in one band */}
       <header className="paper border-b-4 border-stone-900 relative overflow-hidden">
-        <div className="absolute inset-0 halftone opacity-30" />
-        <div className="max-w-6xl mx-auto px-6 py-8 relative">
-          <div className="flex items-baseline justify-between flex-wrap gap-4">
-            <div>
-              <div className="mono text-xs text-stone-600 mb-1">VOL. 26 · USA · CAN · MEX</div>
-              <h1 className="display text-6xl md:text-7xl text-stone-900 leading-none">
+        <div className="absolute inset-0 halftone opacity-30 pointer-events-none" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 relative">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Icon thumbnail */}
+            <img
+              src="/icon-192.png"
+              alt=""
+              className="w-14 h-14 sm:w-16 sm:h-16 border-2 border-stone-900 sticker-shadow flex-shrink-0"
+            />
+
+            {/* Title block */}
+            <div className="flex-1 min-w-0">
+              <div className="mono text-[9px] sm:text-[10px] text-stone-600 leading-none tracking-wider">
+                VOL. 26 · USA · CAN · MEX
+              </div>
+              <h1 className="display text-3xl sm:text-4xl text-stone-900 leading-none mt-0.5">
                 THE STICKER<span className="text-red-700">.</span>
               </h1>
-              <p className="serif italic text-stone-700 mt-2 text-sm">
-                A complete companion to the 2026 FIFA World Cup album
-              </p>
+              {profile ? (
+                <p className="serif text-stone-700 mt-1 text-xs sm:text-sm truncate">
+                  Hello, <span className="font-bold text-stone-900">{profile.name.split(' ')[0]}</span>
+                </p>
+              ) : (
+                <p className="serif italic text-stone-600 mt-1 text-[11px] sm:text-xs hidden sm:block">
+                  Your 2026 FIFA World Cup companion
+                </p>
+              )}
             </div>
-            <div className="text-right">
-              <div className="display text-7xl text-red-700 leading-none">{stats.pct}<span className="text-3xl">%</span></div>
-              <div className="mono text-xs text-stone-600 mt-1">{stats.got} / {stats.total} COLLECTED</div>
+
+            {/* Right side: percentage + mini stats */}
+            <div className="text-right flex-shrink-0">
+              <div className="display text-4xl sm:text-5xl text-red-700 leading-none">
+                {stats.pct}<span className="text-xl sm:text-2xl">%</span>
+              </div>
+              <div className="mono text-[9px] sm:text-[10px] text-stone-600 mt-1 tracking-wider">
+                {stats.got}/{stats.total}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* STATS BAR */}
-      <div className="bg-stone-900 text-stone-100 border-b-4 border-red-700">
-        <div className="max-w-6xl mx-auto px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatBlock icon={<Sticker size={16} />} label="GOT" value={stats.got} accent="text-amber-400" />
-          <StatBlock icon={<X size={16} />} label="STILL NEED" value={stats.need} accent="text-red-400" />
-          <StatBlock icon={<Repeat size={16} />} label="DUPLICATES" value={stats.dupes} accent="text-orange-400" />
-          <StatBlock icon={<Trophy size={16} />} label="COMPLETION" value={`${stats.pct}%`} accent="text-emerald-400" />
+          {/* Compact stats row */}
+          <div className="flex items-center justify-around gap-2 mt-3 pt-3 border-t border-stone-300">
+            <MiniStat icon={<Sticker size={12} />} label="GOT" value={stats.got} color="text-amber-700" />
+            <div className="w-px h-6 bg-stone-300" />
+            <MiniStat icon={<X size={12} />} label="NEED" value={stats.need} color="text-red-700" />
+            <div className="w-px h-6 bg-stone-300" />
+            <MiniStat icon={<Repeat size={12} />} label="DUPES" value={stats.dupes} color="text-orange-700" />
+          </div>
         </div>
+
         {/* Progress bar */}
-        <div className="h-2 bg-stone-800">
+        <div className="h-1.5 bg-stone-300">
           <div
-            className="h-full bg-gradient-to-r from-amber-400 via-red-500 to-emerald-400 transition-all duration-700"
+            className="h-full bg-gradient-to-r from-amber-400 via-red-500 to-emerald-500 transition-all duration-700"
             style={{ width: `${stats.pct}%` }}
           />
         </div>
-      </div>
+      </header>
 
       {/* UPDATE AVAILABLE BANNER */}
       {updateAvailable && (
@@ -670,11 +692,6 @@ export default function PaniniTracker() {
             >
               <Share2 size={12} /> Share Needs
             </button>
-            {profile && (
-              <div className="mono text-[10px] text-stone-600 hidden sm:block">
-                YOU: <span className="font-bold text-stone-900">{profile.name}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -935,13 +952,13 @@ export default function PaniniTracker() {
 // SUB-COMPONENTS
 // ============================================================================
 
-function StatBlock({ icon, label, value, accent }) {
+function MiniStat({ icon, label, value, color }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className={`${accent}`}>{icon}</div>
-      <div>
-        <div className="mono text-[10px] text-stone-400 tracking-widest">{label}</div>
-        <div className={`display text-3xl ${accent}`}>{value}</div>
+    <div className="flex items-center gap-1.5 flex-1 justify-center">
+      <span className={color}>{icon}</span>
+      <div className="flex items-baseline gap-1">
+        <span className={`display text-xl sm:text-2xl ${color} leading-none`}>{value}</span>
+        <span className="mono text-[9px] text-stone-600 tracking-wider">{label}</span>
       </div>
     </div>
   );
