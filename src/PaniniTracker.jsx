@@ -656,7 +656,7 @@ export default function PaniniTracker() {
             <img
               src="/app-image-256.png"
               alt=""
-              className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-stone-900 sticker-shadow flex-shrink-0"
+              className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0"
             />
 
             {/* Title block */}
@@ -828,14 +828,14 @@ export default function PaniniTracker() {
             />
           </div>
 
-          {/* Row 2: Open Pack — full width, Argentine flag background */}
+          {/* Row 2: Open Pack — full width */}
           <button
             onClick={() => setPackMode(true)}
             disabled={screenLocked}
-            className="btn-sticker btn-arg-flag w-full mono text-base uppercase py-3 flex items-center justify-center gap-2 font-black tracking-wider"
+            className="btn-sticker w-full mono text-sm uppercase py-2 bg-amber-400 text-stone-900 flex items-center justify-center gap-2 font-bold tracking-wider"
             title="Quickly log stickers from a new pack"
           >
-            <Package size={18} /> Open Pack
+            <Package size={16} /> Open Pack
           </button>
 
           {/* Row 3: filter chips, centered */}
@@ -863,7 +863,7 @@ export default function PaniniTracker() {
           <div className="flex justify-center gap-2">
             <button
               onClick={shareNeeds}
-              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-emerald-300 text-stone-900 flex items-center gap-1"
+              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-stone-50 text-stone-900 flex items-center gap-1"
               title="Share my needs list"
             >
               <Share2 size={12} /> Share Needs
@@ -879,7 +879,7 @@ export default function PaniniTracker() {
             </button>
             <button
               onClick={() => setShowWelcome(true)}
-              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-sky-200 text-stone-900 flex items-center gap-1"
+              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-stone-50 text-stone-900 flex items-center gap-1"
               title="How to use this app"
             >
               <HelpCircle size={12} /> Help
