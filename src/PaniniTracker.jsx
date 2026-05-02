@@ -1456,7 +1456,11 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
 function ProfileSetup({ onSave }) {
   const [name, setName] = useState('');
   const [groupCode, setGroupCode] = useState('');
-  const valid = name.trim().length >= 2 && groupCode.trim().length >= 3;
+  const trimmedName = name.trim();
+  // Require at least two words (first + last) so friends can tell each other apart
+  const nameWords = trimmedName.split(/\s+/).filter(Boolean);
+  const nameValid = nameWords.length >= 2 && trimmedName.length >= 3;
+  const valid = nameValid && groupCode.trim().length >= 3;
 
   return (
     <div className="max-w-xl mx-auto px-6 py-10">
@@ -1472,10 +1476,15 @@ function ProfileSetup({ onSave }) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Dani"
-            maxLength={24}
+            placeholder="e.g. Daniel Argento"
+            maxLength={32}
             className="w-full px-3 py-2 bg-stone-50 border-2 border-stone-900 serif text-lg focus:outline-none focus:border-red-700"
           />
+          <div className={`mono text-[10px] mt-1 ${trimmedName && !nameValid ? 'text-red-700' : 'text-stone-500'}`}>
+            {trimmedName && !nameValid
+              ? 'Please include first and last name so friends know who you are.'
+              : 'Use first + last name (or last initial) — makes trading easier.'}
+          </div>
         </label>
 
         <label className="block mb-6">
@@ -1518,16 +1527,14 @@ function StatsView({ collection, timeline, album, teams }) {
   const totalStickers = album.length;
   const got = album.filter(s => collection[s.id] > 0).length;
   const dupes = Object.values(collection).reduce((sum, c) => sum + Math.max(0, c - 1), 0);
+  const totalCopiesOwned = Object.values(collection).reduce((sum, c) => sum + c, 0);
   const pct = (got / totalStickers) * 100;
 
-  // Sorted timeline (oldest first) for the cumulative chart
   const sortedTimeline = useMemo(() => [...timeline].sort((a, b) => a.ts - b.ts), [timeline]);
-
-  // First and last timestamps
   const firstSticker = sortedTimeline[0];
   const lastSticker = sortedTimeline[sortedTimeline.length - 1];
 
-  // Per-team progress, sorted by completion %
+  // Per-team progress
   const teamProgress = useMemo(() => {
     return teams.map(t => {
       const teamStickers = album.filter(s => s.team === t.code);
@@ -1536,24 +1543,110 @@ function StatsView({ collection, timeline, album, teams }) {
     }).sort((a, b) => b.pct - a.pct);
   }, [collection, album, teams]);
 
-  // Days of collecting
+  // Per-group (A–L) progress
+  const groupProgress = useMemo(() => {
+    const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+    return groups.map(g => {
+      const groupTeams = teams.filter(t => t.group === g);
+      const teamCodes = groupTeams.map(t => t.code);
+      const groupStickers = album.filter(s => teamCodes.includes(s.team));
+      const groupGot = groupStickers.filter(s => collection[s.id] > 0).length;
+      return {
+        letter: g,
+        got: groupGot,
+        total: groupStickers.length,
+        pct: (groupGot / groupStickers.length) * 100,
+        teams: groupTeams,
+      };
+    });
+  }, [collection, album, teams]);
+
+  // Specials progress
+  const specialsProgress = useMemo(() => {
+    const sections = ['Intro', 'FIFA Museum', 'Coca-Cola Special'];
+    return sections.map(name => {
+      const items = album.filter(s => s.section === name);
+      const items_got = items.filter(s => collection[s.id] > 0).length;
+      return { name, got: items_got, total: items.length, pct: items.length ? (items_got / items.length) * 100 : 0 };
+    });
+  }, [collection, album]);
+
+  // Days collecting + pace + forecast
   const daysCollecting = firstSticker
     ? Math.max(1, Math.ceil((Date.now() - firstSticker.ts) / (1000 * 60 * 60 * 24)))
     : 0;
-  const stickersPerDay = daysCollecting > 0 ? (got / daysCollecting).toFixed(1) : 0;
+  const stickersPerDay = daysCollecting > 0 ? got / daysCollecting : 0;
+  const remainingStickers = totalStickers - got;
+  const forecastDays = stickersPerDay > 0 ? Math.ceil(remainingStickers / stickersPerDay) : null;
+  const forecastDate = forecastDays !== null
+    ? new Date(Date.now() + forecastDays * 24 * 60 * 60 * 1000)
+    : null;
 
-  // Build chart points: cumulative count over time
-  const chartPoints = useMemo(() => {
-    if (sortedTimeline.length === 0) return [];
-    const points = [];
-    sortedTimeline.forEach((entry, i) => {
-      points.push({ ts: entry.ts, count: i + 1 });
+  // Best day (most stickers added in a single calendar day)
+  const bestDay = useMemo(() => {
+    if (sortedTimeline.length === 0) return null;
+    const counts = {};
+    sortedTimeline.forEach(e => {
+      const day = new Date(e.ts).toDateString();
+      counts[day] = (counts[day] || 0) + 1;
     });
-    return points;
+    let best = { day: null, count: 0 };
+    Object.entries(counts).forEach(([day, count]) => {
+      if (count > best.count) best = { day, count };
+    });
+    return best;
   }, [sortedTimeline]);
+
+  // Days since last sticker
+  const daysSinceLast = lastSticker
+    ? Math.floor((Date.now() - lastSticker.ts) / (1000 * 60 * 60 * 24))
+    : null;
+
+  // Recent additions (last 5)
+  const recentAdditions = useMemo(() => {
+    return [...sortedTimeline].reverse().slice(0, 5).map(e => {
+      const sticker = album.find(s => s.id === e.stickerId);
+      return { ...e, sticker };
+    }).filter(x => x.sticker);
+  }, [sortedTimeline, album]);
+
+  // Team distribution buckets
+  const distribution = useMemo(() => {
+    const buckets = { '0%': 0, '1-25%': 0, '26-50%': 0, '51-75%': 0, '76-99%': 0, '100%': 0 };
+    teamProgress.forEach(t => {
+      if (t.pct === 0) buckets['0%']++;
+      else if (t.pct === 100) buckets['100%']++;
+      else if (t.pct <= 25) buckets['1-25%']++;
+      else if (t.pct <= 50) buckets['26-50%']++;
+      else if (t.pct <= 75) buckets['51-75%']++;
+      else buckets['76-99%']++;
+    });
+    return buckets;
+  }, [teamProgress]);
+
+  const completedTeams = teamProgress.filter(t => t.pct === 100);
+
+  // Milestones reached
+  const milestones = [
+    { label: 'First sticker', threshold: 1, icon: '🎉' },
+    { label: '10% complete', threshold: totalStickers * 0.1, icon: '🌱' },
+    { label: '25% complete', threshold: totalStickers * 0.25, icon: '⚡' },
+    { label: 'Halfway there!', threshold: totalStickers * 0.5, icon: '🔥' },
+    { label: '75% complete', threshold: totalStickers * 0.75, icon: '🚀' },
+    { label: 'First team complete', threshold: 0, icon: '⭐', custom: completedTeams.length >= 1 },
+    { label: '5 teams complete', threshold: 0, icon: '🏆', custom: completedTeams.length >= 5 },
+    { label: 'Full album!', threshold: totalStickers, icon: '👑' },
+  ].map(m => ({
+    ...m,
+    reached: m.custom !== undefined ? m.custom : got >= m.threshold,
+  }));
 
   // SVG chart dimensions
   const chartW = 600, chartH = 180, pad = 30;
+  const chartPoints = useMemo(() => {
+    if (sortedTimeline.length === 0) return [];
+    return sortedTimeline.map((entry, i) => ({ ts: entry.ts, count: i + 1 }));
+  }, [sortedTimeline]);
   const xScale = (ts) => {
     if (chartPoints.length < 2) return pad;
     const minTs = chartPoints[0].ts;
@@ -1561,13 +1654,13 @@ function StatsView({ collection, timeline, album, teams }) {
     return pad + ((ts - minTs) / (maxTs - minTs)) * (chartW - 2 * pad);
   };
   const yScale = (count) => chartH - pad - (count / totalStickers) * (chartH - 2 * pad);
-
   const fmtDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmtFullDate = (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-6">
+    <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
       {/* HERO STATS */}
-      <div className="paper border-2 border-stone-900 p-6 mb-6 sticker-shadow">
+      <div className="paper border-2 border-stone-900 p-6 sticker-shadow">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <div className="mono text-[10px] text-stone-600 tracking-widest">COLLECTED</div>
@@ -1577,7 +1670,7 @@ function StatsView({ collection, timeline, album, teams }) {
           <div>
             <div className="mono text-[10px] text-stone-600 tracking-widest">COMPLETION</div>
             <div className="display text-5xl text-emerald-700">{pct.toFixed(1)}%</div>
-            <div className="mono text-[10px] text-stone-500">{totalStickers - got} to go</div>
+            <div className="mono text-[10px] text-stone-500">{remainingStickers} to go</div>
           </div>
           <div>
             <div className="mono text-[10px] text-stone-600 tracking-widest">DUPLICATES</div>
@@ -1586,17 +1679,45 @@ function StatsView({ collection, timeline, album, teams }) {
           </div>
           <div>
             <div className="mono text-[10px] text-stone-600 tracking-widest">PACE</div>
-            <div className="display text-5xl text-stone-900">{stickersPerDay}</div>
+            <div className="display text-5xl text-stone-900">{stickersPerDay.toFixed(1)}</div>
             <div className="mono text-[10px] text-stone-500">stickers/day · {daysCollecting}d</div>
           </div>
         </div>
       </div>
 
-      {/* TIMELINE CHART */}
-      <section className="mb-6">
+      {/* MILESTONES */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-3">
+          <Trophy size={18} className="text-stone-700" />
+          <h2 className="display text-2xl text-stone-900">MILESTONES</h2>
+          <div className="flex-1 border-b border-stone-300" />
+          <span className="mono text-[10px] text-stone-600">{milestones.filter(m => m.reached).length}/{milestones.length}</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {milestones.map((m, i) => (
+            <div
+              key={i}
+              className={`paper border-2 p-3 flex items-center gap-2 transition-opacity ${
+                m.reached ? 'border-amber-700' : 'border-stone-300 opacity-40'
+              }`}
+            >
+              <div className="text-2xl flex-shrink-0">{m.icon}</div>
+              <div className="flex-1 min-w-0">
+                <div className="mono text-[10px] uppercase tracking-wider truncate">{m.label}</div>
+                <div className={`mono text-[9px] ${m.reached ? 'text-emerald-700 font-bold' : 'text-stone-500'}`}>
+                  {m.reached ? '✓ Unlocked' : 'Locked'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* PROGRESS CHART + FORECAST */}
+      <section>
         <div className="flex items-baseline gap-3 mb-3">
           <Zap size={18} className="text-stone-700" />
-          <h2 className="display text-2xl text-stone-900">PROGRESS</h2>
+          <h2 className="display text-2xl text-stone-900">PROGRESS OVER TIME</h2>
           <div className="flex-1 border-b border-stone-300" />
         </div>
         <div className="paper border-2 border-stone-900 p-4">
@@ -1607,18 +1728,13 @@ function StatsView({ collection, timeline, album, teams }) {
           ) : (
             <>
               <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-auto" preserveAspectRatio="none">
-                {/* Y axis grid */}
                 {[0.25, 0.5, 0.75, 1].map(p => (
                   <line key={p} x1={pad} x2={chartW - pad} y1={yScale(p * totalStickers)} y2={yScale(p * totalStickers)} stroke="#d6d3d1" strokeDasharray="2 2" />
                 ))}
-                {/* Path */}
                 <path
                   d={`M ${pad} ${yScale(0)} ${chartPoints.map(p => `L ${xScale(p.ts)} ${yScale(p.count)}`).join(' ')}`}
-                  fill="none"
-                  stroke="#b91c1c"
-                  strokeWidth="2.5"
+                  fill="none" stroke="#b91c1c" strokeWidth="2.5"
                 />
-                {/* Area under curve */}
                 <path
                   d={`M ${pad} ${chartH - pad} L ${pad} ${yScale(0)} ${chartPoints.map(p => `L ${xScale(p.ts)} ${yScale(p.count)}`).join(' ')} L ${xScale(chartPoints[chartPoints.length - 1].ts)} ${chartH - pad} Z`}
                   fill="url(#progressFill)"
@@ -1629,9 +1745,7 @@ function StatsView({ collection, timeline, album, teams }) {
                     <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.05" />
                   </linearGradient>
                 </defs>
-                {/* End marker */}
                 <circle cx={xScale(chartPoints[chartPoints.length - 1].ts)} cy={yScale(chartPoints[chartPoints.length - 1].count)} r="4" fill="#b91c1c" />
-                {/* Y labels */}
                 <text x="4" y={yScale(totalStickers) + 4} fontSize="10" fill="#78716c" fontFamily="DM Mono, monospace">{totalStickers}</text>
                 <text x="4" y={yScale(0) + 4} fontSize="10" fill="#78716c" fontFamily="DM Mono, monospace">0</text>
               </svg>
@@ -1639,16 +1753,173 @@ function StatsView({ collection, timeline, album, teams }) {
                 <span>{firstSticker && <>Started · {fmtDate(firstSticker.ts)}</>}</span>
                 <span>{lastSticker && <>Last · {fmtDate(lastSticker.ts)}</>}</span>
               </div>
+              {/* Forecast */}
+              {forecastDate && got < totalStickers && (
+                <div className="mt-3 pt-3 border-t border-stone-300 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={14} className="text-stone-700" />
+                    <span className="serif text-sm text-stone-800">
+                      At this pace, you'll complete the album around{' '}
+                      <span className="font-bold text-red-700">{fmtFullDate(forecastDate.getTime())}</span>
+                    </span>
+                  </div>
+                  <span className="mono text-[10px] text-stone-600">~{forecastDays} days</span>
+                </div>
+              )}
             </>
           )}
         </div>
       </section>
 
+      {/* QUICK FACTS */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-3">
+          <BarChart3 size={18} className="text-stone-700" />
+          <h2 className="display text-2xl text-stone-900">QUICK FACTS</h2>
+          <div className="flex-1 border-b border-stone-300" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <FactCard
+            label="Best day"
+            value={bestDay && bestDay.count > 0 ? `${bestDay.count}` : '—'}
+            sub={bestDay && bestDay.day ? `stickers on ${new Date(bestDay.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Add some stickers!'}
+          />
+          <FactCard
+            label="Last added"
+            value={daysSinceLast === null ? '—' : daysSinceLast === 0 ? 'Today' : daysSinceLast === 1 ? 'Yesterday' : `${daysSinceLast}d ago`}
+            sub={lastSticker ? lastSticker.stickerId : ''}
+          />
+          <FactCard
+            label="Total copies owned"
+            value={totalCopiesOwned}
+            sub={`${got} unique + ${dupes} dupes`}
+          />
+          <FactCard
+            label="Teams complete"
+            value={completedTeams.length}
+            sub={`of ${teams.length} teams`}
+          />
+          <FactCard
+            label="Days collecting"
+            value={daysCollecting || '—'}
+            sub={firstSticker ? `since ${fmtDate(firstSticker.ts)}` : ''}
+          />
+          <FactCard
+            label="Most-needed group"
+            value={[...groupProgress].sort((a, b) => a.pct - b.pct)[0]?.letter || '—'}
+            sub={`only ${[...groupProgress].sort((a, b) => a.pct - b.pct)[0]?.got || 0}/80 stickers`}
+          />
+        </div>
+      </section>
+
+      {/* GROUPS BREAKDOWN */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-3">
+          <Users size={18} className="text-stone-700" />
+          <h2 className="display text-2xl text-stone-900">BY GROUP</h2>
+          <div className="flex-1 border-b border-stone-300" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {groupProgress.map(g => (
+            <div key={g.letter} className="paper border-2 border-stone-300 p-3 text-center">
+              <div className="display text-3xl text-red-700 leading-none">{g.letter}</div>
+              <div className="mono text-[10px] text-stone-600 mt-1">{g.got}/{g.total}</div>
+              <div className="h-1.5 bg-stone-200 mt-2 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-500" style={{ width: `${g.pct}%` }} />
+              </div>
+              <div className="mono text-[9px] text-stone-700 mt-1 font-bold">{g.pct.toFixed(0)}%</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* DISTRIBUTION */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-3">
+          <BarChart3 size={18} className="text-stone-700" />
+          <h2 className="display text-2xl text-stone-900">TEAM PROGRESS DISTRIBUTION</h2>
+          <div className="flex-1 border-b border-stone-300" />
+        </div>
+        <div className="paper border-2 border-stone-900 p-4 space-y-2">
+          {Object.entries(distribution).map(([range, count]) => {
+            const max = Math.max(...Object.values(distribution), 1);
+            const widthPct = (count / max) * 100;
+            const colors = {
+              '0%': 'bg-stone-400',
+              '1-25%': 'bg-red-400',
+              '26-50%': 'bg-orange-400',
+              '51-75%': 'bg-amber-400',
+              '76-99%': 'bg-lime-500',
+              '100%': 'bg-emerald-600',
+            };
+            return (
+              <div key={range} className="flex items-center gap-3">
+                <span className="mono text-[10px] text-stone-700 w-16 text-right">{range}</span>
+                <div className="flex-1 h-6 bg-stone-100 relative overflow-hidden">
+                  <div className={`h-full ${colors[range]} transition-all duration-500`} style={{ width: `${widthPct}%` }} />
+                </div>
+                <span className="mono text-[11px] font-bold text-stone-900 w-10">{count}</span>
+              </div>
+            );
+          })}
+          <div className="mono text-[9px] text-stone-500 italic mt-2">
+            Number of teams (out of {teams.length}) at each completion level.
+          </div>
+        </div>
+      </section>
+
+      {/* SPECIALS */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-3">
+          <Sticker size={18} className="text-stone-700" />
+          <h2 className="display text-2xl text-stone-900">SPECIAL SECTIONS</h2>
+          <div className="flex-1 border-b border-stone-300" />
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2">
+          {specialsProgress.map(sp => (
+            <div key={sp.name} className="paper border-2 border-stone-300 p-3">
+              <div className="serif font-bold text-stone-900">{sp.name}</div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="mono text-[10px] text-stone-600">{sp.got}/{sp.total}</span>
+                <span className="display text-xl text-red-700">{sp.pct.toFixed(0)}%</span>
+              </div>
+              <div className="h-1.5 bg-stone-200 mt-1 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-500" style={{ width: `${sp.pct}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* RECENT ADDITIONS */}
+      {recentAdditions.length > 0 && (
+        <section>
+          <div className="flex items-baseline gap-3 mb-3">
+            <Calendar size={18} className="text-stone-700" />
+            <h2 className="display text-2xl text-stone-900">RECENT ADDITIONS</h2>
+            <div className="flex-1 border-b border-stone-300" />
+          </div>
+          <div className="paper border-2 border-stone-900 divide-y divide-stone-200">
+            {recentAdditions.map((entry, i) => (
+              <div key={i} className="flex items-center gap-3 p-3">
+                <span className="mono text-xs font-bold w-16 text-stone-900">{entry.stickerId}</span>
+                <span className="serif text-sm flex-1 truncate">
+                  <span className="text-stone-600">{entry.sticker.section}</span>
+                  <span className="text-stone-400 mx-1">·</span>
+                  <span className="text-stone-900">{entry.sticker.label}</span>
+                </span>
+                <span className="mono text-[10px] text-stone-600 flex-shrink-0">{fmtDate(entry.ts)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* TEAM RANKINGS */}
-      <section className="mb-6">
+      <section>
         <div className="flex items-baseline gap-3 mb-3">
           <Crown size={18} className="text-stone-700" />
-          <h2 className="display text-2xl text-stone-900">TEAMS BY COMPLETION</h2>
+          <h2 className="display text-2xl text-stone-900">ALL TEAMS BY COMPLETION</h2>
           <div className="flex-1 border-b border-stone-300" />
         </div>
         <div className="grid sm:grid-cols-2 gap-2">
@@ -1670,6 +1941,16 @@ function StatsView({ collection, timeline, album, teams }) {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function FactCard({ label, value, sub }) {
+  return (
+    <div className="paper border-2 border-stone-300 p-3">
+      <div className="mono text-[10px] uppercase tracking-widest text-stone-600">{label}</div>
+      <div className="display text-3xl text-stone-900 leading-none mt-1">{value}</div>
+      {sub && <div className="mono text-[10px] text-stone-500 mt-1 truncate">{sub}</div>}
     </div>
   );
 }

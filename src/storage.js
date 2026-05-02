@@ -81,14 +81,19 @@ export const storage = {
   // Subscribe to live updates of a group's members. Returns an unsubscribe function.
   subscribeToGroup(groupCode, callback) {
     if (!db) return () => {};
-    const path = safeKey(`group:${groupCode}:member:`).replace(/_$/, '');
-    const groupRef = ref(db, path);
-    const unsub = onValue(groupRef, (snap) => {
+    // Keys are stored flat at root (e.g. "group:mundial2026-greenwich:member:Dani L"),
+    // so listen at root and filter by prefix.
+    const prefix = `group:${groupCode}:member:`;
+    const rootRef = ref(db, '/');
+    const unsub = onValue(rootRef, (snap) => {
       const data = snap.val() || {};
-      const members = Object.values(data).map(v => {
-        try { return typeof v === 'string' ? JSON.parse(v) : v; }
-        catch { return null; }
-      }).filter(Boolean);
+      const members = Object.entries(data)
+        .filter(([k]) => k.startsWith(prefix))
+        .map(([, v]) => {
+          try { return typeof v === 'string' ? JSON.parse(v) : v; }
+          catch { return null; }
+        })
+        .filter(Boolean);
       callback(members);
     });
     return unsub;
