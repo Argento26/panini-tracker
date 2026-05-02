@@ -567,7 +567,10 @@ export default function PaniniTracker() {
       `}</style>
 
       {/* UNIFIED HEADER — masthead + stats in one band */}
-      <header className="paper border-b-4 border-stone-900 relative overflow-hidden">
+      <header
+        className="paper border-b-4 border-stone-900 relative overflow-hidden"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}
+      >
         <div className="absolute inset-0 halftone opacity-30 pointer-events-none" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 relative">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -680,7 +683,7 @@ export default function PaniniTracker() {
               }`}
             >
               <span className="flex items-center gap-2">
-                <UsersRound size={14} /> Group {profile && <span className="text-red-700 font-bold">· {profile.groupCode}</span>}
+                <UsersRound size={14} /> Group {profile && <span className="text-red-700 font-bold hidden sm:inline">· {profile.groupCode}</span>}
               </span>
             </button>
           </div>
@@ -938,7 +941,8 @@ export default function PaniniTracker() {
       <button
         onClick={scrollToTop}
         aria-label="Back to top"
-        className={`fixed bottom-5 right-5 z-40 w-12 h-12 bg-stone-900 text-amber-400 border-2 border-stone-900 sticker-shadow flex items-center justify-center transition-all duration-300 hover:bg-red-700 ${
+        style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0))' }}
+        className={`fixed right-5 z-40 w-12 h-12 bg-stone-900 text-amber-400 border-2 border-stone-900 sticker-shadow flex items-center justify-center transition-all duration-300 hover:bg-red-700 ${
           showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
       >
