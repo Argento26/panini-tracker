@@ -613,6 +613,22 @@ export default function PaniniTracker() {
           cursor: not-allowed;
           box-shadow: 2px 2px 0 #1c1917;
         }
+        /* Argentine flag background — celeste/white/celeste horizontal stripes with sun */
+        .btn-arg-flag {
+          background:
+            radial-gradient(circle at center, rgba(252, 211, 77, 0.85) 0, rgba(252, 211, 77, 0.5) 18px, transparent 22px),
+            linear-gradient(
+              to bottom,
+              #74ACDF 0%,
+              #74ACDF 33%,
+              #ffffff 33%,
+              #ffffff 66%,
+              #74ACDF 66%,
+              #74ACDF 100%
+            );
+          color: #1c1917;
+          text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+        }
         @keyframes stamp {
           0% { transform: scale(1.5) rotate(-12deg); opacity: 0; }
           60% { transform: scale(0.95) rotate(-12deg); opacity: 1; }
@@ -638,7 +654,7 @@ export default function PaniniTracker() {
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Icon thumbnail */}
             <img
-              src="/icon-192.png"
+              src="/app-image-256.png"
               alt=""
               className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-stone-900 sticker-shadow flex-shrink-0"
             />
@@ -794,28 +810,57 @@ export default function PaniniTracker() {
       {/* CONTROLS */}
       <div className="paper border-b-2 border-stone-900 sticky top-0 z-20 shadow-md">
         <div className="max-w-6xl mx-auto px-6 py-3 space-y-2">
-          {/* Row 1: search + action buttons */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex-1 min-w-[200px] relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
-              <input
-                type="text"
-                placeholder="Search stickers, players, teams…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') jumpToSearchResult(); }}
-                className="w-full pl-9 pr-3 py-2 bg-stone-50 border-2 border-stone-900 mono text-base focus:outline-none focus:border-red-700"
-                style={{ fontSize: '16px' }}
-              />
-            </div>
-            <button
-              onClick={() => setPackMode(true)}
-              disabled={screenLocked}
-              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-amber-400 text-stone-900 flex items-center gap-1"
-              title="Quickly log stickers from a new pack"
-            >
-              <Package size={12} /> Open Pack
-            </button>
+          {/* Row 1: search */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+            <input
+              type="text"
+              placeholder="Search stickers, players, teams…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value.toUpperCase())}
+              onKeyDown={(e) => { if (e.key === 'Enter') jumpToSearchResult(); }}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck="false"
+              className="w-full pl-9 pr-3 py-2 bg-stone-50 border-2 border-stone-900 mono focus:outline-none focus:border-red-700"
+              style={{ fontSize: '16px' }}
+            />
+          </div>
+
+          {/* Row 2: Open Pack — full width, Argentine flag background */}
+          <button
+            onClick={() => setPackMode(true)}
+            disabled={screenLocked}
+            className="btn-sticker btn-arg-flag w-full mono text-base uppercase py-3 flex items-center justify-center gap-2 font-black tracking-wider"
+            title="Quickly log stickers from a new pack"
+          >
+            <Package size={18} /> Open Pack
+          </button>
+
+          {/* Row 3: filter chips, centered */}
+          <div className="flex justify-center gap-2">
+            {['all', 'got', 'need', 'dupes'].map(f => {
+              const colors = {
+                all:   filter === 'all'   ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900',
+                got:   filter === 'got'   ? 'bg-amber-400 text-stone-900' : 'bg-stone-50 text-stone-900',
+                need:  filter === 'need'  ? 'bg-red-400 text-stone-900'   : 'bg-stone-50 text-stone-900',
+                dupes: filter === 'dupes' ? 'bg-orange-400 text-stone-900': 'bg-stone-50 text-stone-900',
+              };
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`btn-sticker py-1.5 mono text-xs uppercase w-20 text-center ${colors[f]}`}
+                >
+                  {f}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Row 4: secondary actions, centered */}
+          <div className="flex justify-center gap-2">
             <button
               onClick={shareNeeds}
               className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-emerald-300 text-stone-900 flex items-center gap-1"
@@ -839,27 +884,6 @@ export default function PaniniTracker() {
             >
               <HelpCircle size={12} /> Help
             </button>
-          </div>
-
-          {/* Row 2: filter chips, centered */}
-          <div className="flex justify-center gap-2">
-            {['all', 'got', 'need', 'dupes'].map(f => {
-              const colors = {
-                all:   filter === 'all'   ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900',
-                got:   filter === 'got'   ? 'bg-amber-400 text-stone-900' : 'bg-stone-50 text-stone-900',
-                need:  filter === 'need'  ? 'bg-red-400 text-stone-900'   : 'bg-stone-50 text-stone-900',
-                dupes: filter === 'dupes' ? 'bg-orange-400 text-stone-900': 'bg-stone-50 text-stone-900',
-              };
-              return (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`btn-sticker py-1.5 mono text-xs uppercase w-20 text-center ${colors[f]}`}
-                >
-                  {f}
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
