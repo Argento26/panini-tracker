@@ -324,16 +324,19 @@ export default function PaniniTracker() {
     if (loading || !profile) return;
     const t = setTimeout(() => {
       const memberKey = `group:${profile.groupCode}:member:${profile.name}`;
+      // Preserve incomingRequests (other members write to this field)
+      const me = groupMembers.find(m => m.name === profile.name);
       const payload = {
         name: profile.name,
         collection,
         reservations,
+        incomingRequests: me?.incomingRequests || {},
         updatedAt: Date.now(),
       };
       storage.set(memberKey, JSON.stringify(payload), true).catch(() => {});
     }, 800);
     return () => clearTimeout(t);
-  }, [collection, reservations, profile, loading]);
+  }, [collection, reservations, profile, loading, groupMembers]);
 
   // Subscribe to live group updates whenever profile is set
   useEffect(() => {
@@ -512,6 +515,53 @@ export default function PaniniTracker() {
       else next[stickerId] = friendName;
       return next;
     });
+  };
+
+  // Ask another member for a sticker. Writes to THAT member's incomingRequests on Firebase.
+  const requestStickerFromMember = async (memberName, stickerId) => {
+    if (!profile) return;
+    // Find the member's current data so we don't clobber their other fields
+    const target = groupMembers.find(m => m.name === memberName);
+    if (!target) return;
+    const incoming = { ...(target.incomingRequests || {}) };
+    const key = `${profile.name}|${stickerId}`;
+    if (incoming[key]) {
+      // Already requested — toggle off (cancel the request)
+      delete incoming[key];
+    } else {
+      incoming[key] = { from: profile.name, stickerId, ts: Date.now() };
+    }
+    const updated = { ...target, incomingRequests: incoming, updatedAt: Date.now() };
+    const memberKey = `group:${profile.groupCode}:member:${memberName}`;
+    await storage.set(memberKey, JSON.stringify(updated), true).catch(() => {});
+  };
+
+  // Promise an incoming request: reserve the sticker for that asker, then clear the request.
+  const promiseRequest = async (fromName, stickerId) => {
+    setReservations(prev => ({ ...prev, [stickerId]: fromName }));
+    await clearIncomingRequest(fromName, stickerId);
+  };
+
+  // Decline (or simply clear) an incoming request
+  const declineRequest = async (fromName, stickerId) => {
+    await clearIncomingRequest(fromName, stickerId);
+  };
+
+  // Helper: remove a single incoming request from MY entry
+  const clearIncomingRequest = async (fromName, stickerId) => {
+    if (!profile) return;
+    const me = groupMembers.find(m => m.name === profile.name);
+    const incoming = { ...(me?.incomingRequests || {}) };
+    delete incoming[`${fromName}|${stickerId}`];
+    const memberKey = `group:${profile.groupCode}:member:${profile.name}`;
+    const payload = {
+      name: profile.name,
+      collection,
+      reservations,
+      incomingRequests: incoming,
+      updatedAt: Date.now(),
+    };
+    await storage.set(memberKey, JSON.stringify(payload), true).catch(() => {});
   };
 
   // Build a shareable text list of stickers I still need
@@ -776,6 +826,9 @@ export default function PaniniTracker() {
           myCollection={collection}
           myReservations={reservations}
           onToggleReservation={toggleReservation}
+          onRequestSticker={requestStickerFromMember}
+          onPromiseRequest={promiseRequest}
+          onDeclineRequest={declineRequest}
           onRefresh={refreshGroup}
           refreshing={refreshingGroup}
           album={ALBUM}
@@ -1187,7 +1240,7 @@ function getSpecialStats(album, collection, team) {
 // GROUP VIEW — leaderboard, trade matching, member management
 // ============================================================================
 
-function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRefresh, refreshing, album, teams }) {
+function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, onRefresh, refreshing, album, teams }) {
   // Profile setup screen
   if (!profile) {
     return <ProfileSetup onSave={onSaveProfile} />;
@@ -1200,6 +1253,9 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
       myCollection={myCollection}
       myReservations={myReservations}
       onToggleReservation={onToggleReservation}
+      onRequestSticker={onRequestSticker}
+      onPromiseRequest={onPromiseRequest}
+      onDeclineRequest={onDeclineRequest}
       onRefresh={onRefresh}
       refreshing={refreshing}
       album={album}
@@ -1208,7 +1264,7 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
   );
 }
 
-function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, album, teams, onRefresh, refreshing }) {
+function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, album, teams, onRefresh, refreshing }) {
   const totalStickers = album.length;
 
   // Leaderboard: sort by completion %
@@ -1260,9 +1316,16 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
         return !reservedFor || reservedFor === m.name;
       });
 
+      // Stickers I've already requested from this member (look at THEIR incomingRequests)
+      const incomingFromMe = m.incomingRequests || {};
+      const requestedIds = Object.values(incomingFromMe)
+        .filter(r => r && r.from === profile.name)
+        .map(r => r.stickerId);
+
       if (matchOffers.length) {
         const reservedToMe = matchOffers.filter(id => (m.reservations || {})[id] === profile.name);
-        offersForMe.push({ name: m.name, stickers: matchOffers, reservedToMe });
+        const requested = matchOffers.filter(id => requestedIds.includes(id));
+        offersForMe.push({ name: m.name, stickers: matchOffers, reservedToMe, requested });
       }
       if (matchWants.length) {
         const reservedToThem = matchWants.filter(id => myReservations?.[id] === m.name);
@@ -1272,6 +1335,23 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
 
     return { offersForMe, wantsFromMe };
   }, [members, myCollection, myReservations, profile.name, album]);
+
+  // My incoming requests (from MY entry in members)
+  const myIncoming = useMemo(() => {
+    const me = members.find(m => m.name === profile.name);
+    const incoming = me?.incomingRequests || {};
+    // Group by asker
+    const byAsker = {};
+    Object.values(incoming).forEach(r => {
+      if (!r || !r.from || !r.stickerId) return;
+      if (!byAsker[r.from]) byAsker[r.from] = [];
+      byAsker[r.from].push({ stickerId: r.stickerId, ts: r.ts });
+    });
+    return Object.entries(byAsker).map(([from, items]) => ({
+      from,
+      items: items.sort((a, b) => a.stickerId.localeCompare(b.stickerId)),
+    }));
+  }, [members, profile.name]);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
@@ -1345,6 +1425,53 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
             </div>
           </section>
 
+          {/* INCOMING REQUESTS — shown when other members have asked me for stickers */}
+          {myIncoming.length > 0 && (
+            <section className="mb-8">
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className="text-2xl">📥</span>
+                <h2 className="display text-2xl text-stone-900">REQUESTS FROM FRIENDS</h2>
+                <div className="flex-1 border-b border-stone-300" />
+                <span className="mono text-[10px] text-amber-700 font-bold">
+                  {myIncoming.reduce((n, r) => n + r.items.length, 0)} pending
+                </span>
+              </div>
+              <div className="paper border-2 border-amber-700 p-4 space-y-4 sticker-shadow">
+                {myIncoming.map(req => (
+                  <div key={req.from} className="border-b border-stone-300 last:border-b-0 pb-3 last:pb-0">
+                    <div className="serif font-bold text-stone-900 mb-2">
+                      <span className="text-amber-700">{req.from}</span> is asking for:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {req.items.map(item => (
+                        <div key={item.stickerId} className="flex items-center gap-1 border-2 border-amber-700 bg-amber-50 px-2 py-1">
+                          <span className="mono text-xs font-bold text-stone-900">{item.stickerId}</span>
+                          <button
+                            onClick={() => onPromiseRequest(req.from, item.stickerId)}
+                            className="mono text-[9px] uppercase px-2 py-0.5 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors"
+                            title="Reserve this sticker for them"
+                          >
+                            ✓ Promise
+                          </button>
+                          <button
+                            onClick={() => onDeclineRequest(req.from, item.stickerId)}
+                            className="mono text-[9px] uppercase px-2 py-0.5 bg-stone-200 text-stone-900 hover:bg-red-100 transition-colors"
+                            title="Dismiss this request"
+                          >
+                            ✗ Decline
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="mono text-[9px] text-stone-600 italic pt-1">
+                  Promising reserves the sticker so you don't accidentally promise it to two people.
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* TRADE MATCHING */}
           <section className="mb-8">
             <div className="flex items-baseline gap-3 mb-3">
@@ -1357,6 +1484,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
               {/* They have what I need */}
               <div className="paper border-2 border-emerald-700 p-4">
                 <div className="mono text-[10px] uppercase tracking-widest text-emerald-700 mb-2">▼ THEY HAVE · I NEED</div>
+                <div className="mono text-[10px] text-stone-600 mb-3 -mt-1">Tap a sticker to ask that friend for it.</div>
                 {trades.offersForMe.length === 0 ? (
                   <div className="serif text-stone-600 text-sm italic">No matches yet — add more stickers as got/dupe.</div>
                 ) : (
@@ -1369,6 +1497,8 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
                         accent="emerald"
                         reserved={o.reservedToMe || []}
                         reservedLabel="reserved for you"
+                        requested={o.requested || []}
+                        onToggleRequest={(id) => onRequestSticker(o.name, id)}
                       />
                     ))}
                   </div>
@@ -1405,12 +1535,14 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
   );
 }
 
-function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve }) {
+function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, requested = [], onToggleRequest }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? stickers : stickers.slice(0, 12);
   const accentClass = accent === 'emerald' ? 'bg-emerald-100 border-emerald-700 text-emerald-900' : 'bg-orange-100 border-orange-700 text-orange-900';
   const reservedClass = 'bg-stone-900 border-stone-900 text-amber-400 line-through opacity-90';
+  const requestedClass = 'bg-amber-300 border-amber-700 text-stone-900 font-bold';
   const reservedSet = new Set(reserved);
+  const requestedSet = new Set(requested);
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
@@ -1418,22 +1550,35 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
         <div className="mono text-[10px] text-stone-600">
           {stickers.length} stickers
           {reserved.length > 0 && <span className="ml-1 text-stone-900">· {reserved.length} {reservedLabel}</span>}
+          {requested.length > 0 && <span className="ml-1 text-amber-700">· {requested.length} asked</span>}
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
         {visible.map(id => {
           const isReserved = reservedSet.has(id);
-          const cls = isReserved ? reservedClass : accentClass;
-          const clickable = !!onToggleReserve;
+          const isRequested = requestedSet.has(id);
+          const cls = isReserved ? reservedClass : (isRequested ? requestedClass : accentClass);
+          // Pick which click handler is active. Reserve takes priority on the orange (have) side; request on the green (need) side.
+          let onClick = undefined;
+          let title = '';
+          if (onToggleReserve) {
+            onClick = () => onToggleReserve(id);
+            title = isReserved ? 'Tap to un-reserve' : `Tap to reserve for ${name}`;
+          } else if (onToggleRequest) {
+            onClick = () => onToggleRequest(id);
+            title = isRequested ? `Tap to cancel request for ${id}` : `Tap to ask ${name} for ${id}`;
+          }
+          const clickable = !!onClick;
           return (
             <button
               key={id}
-              onClick={clickable ? () => onToggleReserve(id) : undefined}
+              onClick={onClick}
               disabled={!clickable}
               className={`mono text-[10px] px-1.5 py-0.5 border ${cls} ${clickable ? 'cursor-pointer hover:scale-105 transition-transform' : 'cursor-default'}`}
-              title={clickable ? (isReserved ? 'Tap to un-reserve' : `Tap to reserve for ${name}`) : (isReserved ? `Reserved by ${name} for you` : '')}
+              title={title}
             >
               {isReserved && <Lock size={8} className="inline mr-0.5 -mt-0.5" />}
+              {isRequested && !isReserved && <span className="mr-0.5">🙋</span>}
               {id}
             </button>
           );
@@ -2208,14 +2353,16 @@ function WelcomeModal({ onClose }) {
           <section>
             <h3 className="display text-lg text-red-700 mb-1">The Group tab — where the magic is</h3>
             <p className="mb-2">
-              Enter your name + the shared group code your friends sent you. Once you're in, two things appear:
+              Enter your name + the shared group code your friends sent you. Once you're in:
             </p>
             <ul className="space-y-1.5 ml-4 list-disc">
-              <li><strong>Leaderboard</strong> — who's closest to completing the album</li>
-              <li><strong>Trade Board</strong> — automatically shows which friends have duplicates of stickers you need, and vice versa. Tap a duplicate you're offering to <strong>reserve it</strong> for that specific friend, so you don't accidentally promise the same one to two people.</li>
+              <li><strong>Leaderboard</strong> — who's closest to completing the album.</li>
+              <li><strong>Trade Board (left, green)</strong> — friends who have duplicates of stickers you need. <strong>Tap any sticker to ask</strong> that friend for it — they'll see the request next time they open the app.</li>
+              <li><strong>Trade Board (right, orange)</strong> — stickers you have as duplicates that friends need. Tap one to <strong>reserve it</strong> for a specific friend, so you don't promise the same dupe to two people.</li>
+              <li><strong>Requests from friends</strong> — when someone asks you for a sticker, you'll see it at the top of the Group tab. Tap <strong>Promise</strong> to reserve it for them, or <strong>Decline</strong> to dismiss.</li>
             </ul>
             <p className="mt-2 text-stone-700 italic">
-              Everything syncs in real time. When a friend logs a new sticker, you see it within a second.
+              Everything syncs in real time. When a friend logs a new sticker or asks for one, you see it within a second.
             </p>
           </section>
 
