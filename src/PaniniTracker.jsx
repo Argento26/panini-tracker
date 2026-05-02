@@ -793,19 +793,56 @@ export default function PaniniTracker() {
 
       {/* CONTROLS */}
       <div className="paper border-b-2 border-stone-900 sticky top-0 z-20 shadow-md">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex flex-wrap gap-3 items-center">
-          <div className="flex-1 min-w-[200px] relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
-            <input
-              type="text"
-              placeholder="Search stickers, players, teams…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') jumpToSearchResult(); }}
-              className="w-full pl-9 pr-3 py-2 bg-stone-50 border-2 border-stone-900 mono text-sm focus:outline-none focus:border-red-700"
-            />
+        <div className="max-w-6xl mx-auto px-6 py-3 space-y-2">
+          {/* Row 1: search + action buttons */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex-1 min-w-[200px] relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+              <input
+                type="text"
+                placeholder="Search stickers, players, teams…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') jumpToSearchResult(); }}
+                className="w-full pl-9 pr-3 py-2 bg-stone-50 border-2 border-stone-900 mono text-base focus:outline-none focus:border-red-700"
+                style={{ fontSize: '16px' }}
+              />
+            </div>
+            <button
+              onClick={() => setPackMode(true)}
+              disabled={screenLocked}
+              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-amber-400 text-stone-900 flex items-center gap-1"
+              title="Quickly log stickers from a new pack"
+            >
+              <Package size={12} /> Open Pack
+            </button>
+            <button
+              onClick={shareNeeds}
+              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-emerald-300 text-stone-900 flex items-center gap-1"
+              title="Share my needs list"
+            >
+              <Share2 size={12} /> Share Needs
+            </button>
+            <button
+              onClick={() => setScreenLocked(l => !l)}
+              className={`btn-sticker mono text-xs uppercase px-3 py-1.5 flex items-center gap-1 ${
+                screenLocked ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900'
+              }`}
+              title={screenLocked ? 'Tap to unlock taps' : 'Lock taps to prevent accidents'}
+            >
+              <Lock size={12} /> {screenLocked ? 'Locked' : 'Lock'}
+            </button>
+            <button
+              onClick={() => setShowWelcome(true)}
+              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-sky-200 text-stone-900 flex items-center gap-1"
+              title="How to use this app"
+            >
+              <HelpCircle size={12} /> Help
+            </button>
           </div>
-          <div className="flex gap-2">
+
+          {/* Row 2: filter chips, centered */}
+          <div className="flex justify-center gap-2">
             {['all', 'got', 'need', 'dupes'].map(f => {
               const colors = {
                 all:   filter === 'all'   ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900',
@@ -817,44 +854,13 @@ export default function PaniniTracker() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`btn-sticker px-3 py-1.5 mono text-xs uppercase ${colors[f]}`}
+                  className={`btn-sticker py-1.5 mono text-xs uppercase w-20 text-center ${colors[f]}`}
                 >
                   {f}
                 </button>
               );
             })}
           </div>
-          <button
-            onClick={() => setPackMode(true)}
-            disabled={screenLocked}
-            className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-amber-400 text-stone-900 flex items-center gap-1"
-            title="Quickly log stickers from a new pack"
-          >
-            <Package size={12} /> Open Pack
-          </button>
-          <button
-            onClick={shareNeeds}
-            className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-emerald-300 text-stone-900 flex items-center gap-1"
-            title="Share my needs list"
-          >
-            <Share2 size={12} /> Share Needs
-          </button>
-          <button
-            onClick={() => setScreenLocked(l => !l)}
-            className={`btn-sticker mono text-xs uppercase px-3 py-1.5 flex items-center gap-1 ${
-              screenLocked ? 'bg-stone-900 text-amber-400' : 'bg-stone-50 text-stone-900'
-            }`}
-            title={screenLocked ? 'Tap to unlock taps' : 'Lock taps to prevent accidents'}
-          >
-            <Lock size={12} /> {screenLocked ? 'Locked' : 'Lock'}
-          </button>
-          <button
-            onClick={() => setShowWelcome(true)}
-            className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-sky-200 text-stone-900 flex items-center gap-1"
-            title="How to use this app"
-          >
-            <HelpCircle size={12} /> Help
-          </button>
         </div>
       </div>
 
