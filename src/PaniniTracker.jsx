@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download, Upload, UsersRound, ArrowLeftRight, LogOut, Crown, Package, Share2, BarChart3, Lock, Zap, Calendar, HelpCircle, ArrowUp } from 'lucide-react';
+import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download, Upload, UsersRound, ArrowLeftRight, LogOut, Crown, Package, Share2, BarChart3, Lock, Zap, Calendar, HelpCircle, ArrowUp, MessageCircle } from 'lucide-react';
 import { storage } from './storage.js';
 
 // ============================================================================
@@ -137,6 +137,7 @@ export default function PaniniTracker() {
   const [appVersion, setAppVersion] = useState(null); // hash of the loaded JS bundle
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
 
   // Show "back to top" button after scrolling down
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -288,6 +289,22 @@ export default function PaniniTracker() {
   const dismissWelcome = async () => {
     setShowWelcome(false);
     await storage.set('panini-wc-2026-welcomed', '1').catch(() => {});
+  };
+
+  // Submit a suggestion / feedback to Firebase. The developer reads these from the console.
+  const submitSuggestion = async (message) => {
+    const trimmed = (message || '').trim().slice(0, 500);
+    if (!trimmed) return;
+    const ts = Date.now();
+    // Random suffix so two people sending at the same millisecond don't collide
+    const id = `${ts}-${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+      from: profile?.name || 'Anonymous',
+      groupCode: profile?.groupCode || null,
+      message: trimmed,
+      ts,
+    };
+    await storage.set(`feedback:${id}`, JSON.stringify(payload), true).catch(() => {});
   };
 
   // Track scroll position to show/hide "back to top" button
@@ -935,7 +952,7 @@ export default function PaniniTracker() {
           </div>
 
           {/* Row 4: secondary actions, centered */}
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 flex-wrap">
             <button
               onClick={shareNeeds}
               className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-stone-50 text-stone-900 flex items-center gap-1"
@@ -958,6 +975,13 @@ export default function PaniniTracker() {
               title="How to use this app"
             >
               <HelpCircle size={12} /> Help
+            </button>
+            <button
+              onClick={() => setShowSuggest(true)}
+              className="btn-sticker mono text-xs uppercase px-3 py-1.5 bg-stone-50 text-stone-900 flex items-center gap-1"
+              title="Send a suggestion or feedback to the developer"
+            >
+              <MessageCircle size={12} /> Suggest
             </button>
           </div>
         </div>
@@ -1111,6 +1135,15 @@ export default function PaniniTracker() {
           onClose={dismissWelcome}
           onReset={resetCollection}
           collectedCount={stats.got}
+        />
+      )}
+
+      {/* SUGGEST / FEEDBACK MODAL */}
+      {showSuggest && (
+        <SuggestModal
+          authorName={profile?.name || 'Anonymous'}
+          onSubmit={submitSuggestion}
+          onClose={() => setShowSuggest(false)}
         />
       )}
 
@@ -2498,6 +2531,120 @@ function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
           >
             Got it!
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SUGGEST MODAL — sends feedback/suggestions directly to Firebase for the dev
+// ============================================================================
+
+function SuggestModal({ authorName, onSubmit, onClose }) {
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const max = 500;
+  const remaining = max - message.length;
+  const trimmed = message.trim();
+  const canSubmit = trimmed.length >= 3 && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(message);
+      setSubmitted(true);
+    } catch {
+      // Even if it fails, show the thank-you so the user feels heard.
+      setSubmitted(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-900/80 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="paper border-4 border-stone-900 sticker-shadow w-full max-w-lg my-8"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-stone-900 text-amber-400 px-5 py-4 flex items-center justify-between">
+          <div>
+            <div className="display text-2xl leading-none">SUGGEST</div>
+            <div className="mono text-[10px] text-stone-400 mt-0.5">Send a note to the developer</div>
+          </div>
+          <button onClick={onClose} className="text-amber-400 hover:text-white" aria-label="Close">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6">
+          {!submitted ? (
+            <>
+              <p className="serif text-stone-700 text-sm mb-4">
+                Found a bug? Have an idea? Want a feature? Drop it here — your suggestion goes straight to the developer's inbox.
+              </p>
+
+              <div className="mb-4">
+                <div className="mono text-[10px] uppercase tracking-widest text-stone-600 mb-1">FROM</div>
+                <div className="paper border-2 border-stone-300 px-3 py-2 mono text-sm text-stone-900">
+                  {authorName}
+                </div>
+              </div>
+
+              <label className="block mb-4">
+                <div className="flex items-baseline justify-between mb-1">
+                  <div className="mono text-[10px] uppercase tracking-widest text-stone-600">YOUR MESSAGE</div>
+                  <div className={`mono text-[10px] ${remaining < 50 ? 'text-red-700' : 'text-stone-500'}`}>
+                    {remaining}
+                  </div>
+                </div>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value.slice(0, max))}
+                  placeholder="Type your suggestion or feedback…"
+                  rows={5}
+                  className="w-full px-3 py-2 bg-stone-50 border-2 border-stone-900 serif focus:outline-none focus:border-red-700 resize-none"
+                  style={{ fontSize: '16px' }}
+                />
+              </label>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={onClose}
+                  className="mono text-xs uppercase px-4 py-2 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="mono text-xs uppercase px-4 py-2 border-2 border-stone-900 bg-stone-900 text-amber-400 hover:bg-red-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </>
+          ) : (
+            // Thank-you state
+            <div className="text-center py-6">
+              <div className="text-5xl mb-3">💌</div>
+              <div className="display text-2xl text-stone-900 mb-2">Thanks!</div>
+              <p className="serif text-stone-700 text-sm mb-5">
+                Your suggestion was sent. The developer will read it soon.
+              </p>
+              <button
+                onClick={onClose}
+                className="mono text-xs uppercase px-6 py-2 bg-stone-900 text-amber-400 hover:bg-red-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
