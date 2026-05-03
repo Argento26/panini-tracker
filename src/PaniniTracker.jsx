@@ -3,6 +3,15 @@ import { Search, Check, Plus, Minus, Trophy, Sticker, Users, Repeat, X, Download
 import { storage } from './storage.js';
 
 // ============================================================================
+// FEATURE FLAGS — flip these on/off without changing any other code
+// ============================================================================
+
+// Multi-group switcher: when true, users see a "Switch Group" button that lets
+// them join multiple groups and toggle the active one. The data model already
+// supports this (profile.groups[]) — this just toggles the UI visibility.
+const SHOW_GROUP_SWITCHER = false;
+
+// ============================================================================
 // ALBUM DATA: 2026 FIFA World Cup — Panini
 // 980 stickers total: 9 intro + 11 FIFA Museum + 48 teams × 20 + 12 Coca-Cola special
 // Each team: 1 crest + 1 team photo + 18 players = 20 stickers
@@ -171,7 +180,15 @@ export default function PaniniTracker() {
       }
       try {
         const profileResult = await storage.get('panini-wc-2026-profile');
-        if (profileResult?.value) setProfile(JSON.parse(profileResult.value));
+        if (profileResult?.value) {
+          let p = JSON.parse(profileResult.value);
+          // Migration: if old shape (no groups[] array), upgrade it in place
+          if (p && !Array.isArray(p.groups)) {
+            p = { ...p, groups: p.groupCode ? [p.groupCode] : [] };
+            await storage.set('panini-wc-2026-profile', JSON.stringify(p)).catch(() => {});
+          }
+          setProfile(p);
+        }
       } catch (e) {
         // No profile yet
       }
@@ -376,7 +393,13 @@ export default function PaniniTracker() {
   };
 
   const saveProfile = async (name, groupCode) => {
-    const newProfile = { name: name.trim(), groupCode: groupCode.trim().toLowerCase().replace(/\s+/g, '-') };
+    const cleanCode = groupCode.trim().toLowerCase().replace(/\s+/g, '-');
+    const cleanName = name.trim();
+    // If the user already had a profile (e.g. someone editing their name), keep the groups list.
+    // Otherwise initialize with this single group.
+    const existingGroups = profile?.groups || [];
+    const groups = existingGroups.includes(cleanCode) ? existingGroups : [...existingGroups, cleanCode];
+    const newProfile = { name: cleanName, groupCode: cleanCode, groups };
     setProfile(newProfile);
     await storage.set('panini-wc-2026-profile', JSON.stringify(newProfile)).catch(() => {});
     // Immediately publish current collection
@@ -389,18 +412,61 @@ export default function PaniniTracker() {
     }), true).catch(() => {});
   };
 
+  // Switch the active group to one already in the user's groups list.
+  const switchActiveGroup = async (groupCode) => {
+    if (!profile) return;
+    if (!profile.groups?.includes(groupCode)) return;
+    const newProfile = { ...profile, groupCode };
+    setProfile(newProfile);
+    setGroupMembers([]); // clear stale group members so the new subscription doesn't flash old data
+    await storage.set('panini-wc-2026-profile', JSON.stringify(newProfile)).catch(() => {});
+  };
+
+  // Join an additional group (adds to groups list, sets it active, publishes collection).
+  const joinAdditionalGroup = async (groupCode) => {
+    if (!profile) return;
+    const cleanCode = groupCode.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!cleanCode) return;
+    const groups = profile.groups?.includes(cleanCode) ? profile.groups : [...(profile.groups || []), cleanCode];
+    const newProfile = { ...profile, groupCode: cleanCode, groups };
+    setProfile(newProfile);
+    setGroupMembers([]);
+    await storage.set('panini-wc-2026-profile', JSON.stringify(newProfile)).catch(() => {});
+    // Publish current collection to the new group
+    const memberKey = `group:${cleanCode}:member:${profile.name}`;
+    await storage.set(memberKey, JSON.stringify({
+      name: profile.name,
+      collection,
+      reservations,
+      updatedAt: Date.now(),
+    }), true).catch(() => {});
+  };
+
   const leaveGroup = async () => {
     if (!profile) return;
-    if (!confirm(`Leave group "${profile.groupCode}"? Your collection stays on this device.`)) return;
-    // Remove our entry from the shared group
+    const remaining = (profile.groups || []).filter(g => g !== profile.groupCode);
+    const promptMsg = remaining.length > 0
+      ? `Leave group "${profile.groupCode}"? You'll switch to "${remaining[0]}". Your collection stays on this device.`
+      : `Leave group "${profile.groupCode}"? Your collection stays on this device.`;
+    if (!confirm(promptMsg)) return;
+    // Remove our entry from this group's shared data
     try {
       const memberKey = `group:${profile.groupCode}:member:${profile.name}`;
       await storage.delete(memberKey, true);
     } catch {}
-    await storage.delete('panini-wc-2026-profile').catch(() => {});
-    setProfile(null);
-    setGroupMembers([]);
-    setView('album');
+    if (remaining.length > 0) {
+      // Fall back to first remaining group
+      const newProfile = { ...profile, groupCode: remaining[0], groups: remaining };
+      setProfile(newProfile);
+      setGroupMembers([]);
+      await storage.set('panini-wc-2026-profile', JSON.stringify(newProfile)).catch(() => {});
+    } else {
+      // No groups left — clear profile entirely
+      await storage.delete('panini-wc-2026-profile').catch(() => {});
+      setProfile(null);
+      setGroupMembers([]);
+      setView('album');
+    }
   };
 
   // Total reset — wipes the local collection, timeline, and reservations.
@@ -868,6 +934,8 @@ export default function PaniniTracker() {
           onRequestSticker={requestStickerFromMember}
           onPromiseRequest={promiseRequest}
           onDeclineRequest={declineRequest}
+          onSwitchGroup={switchActiveGroup}
+          onJoinAdditionalGroup={joinAdditionalGroup}
           onRefresh={refreshGroup}
           refreshing={refreshingGroup}
           album={ALBUM}
@@ -1301,7 +1369,7 @@ function getSpecialStats(album, collection, team) {
 // GROUP VIEW — leaderboard, trade matching, member management
 // ============================================================================
 
-function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, onRefresh, refreshing, album, teams }) {
+function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, onRefresh, refreshing, album, teams }) {
   // Profile setup screen
   if (!profile) {
     return <ProfileSetup onSave={onSaveProfile} />;
@@ -1317,6 +1385,8 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
       onRequestSticker={onRequestSticker}
       onPromiseRequest={onPromiseRequest}
       onDeclineRequest={onDeclineRequest}
+      onSwitchGroup={onSwitchGroup}
+      onJoinAdditionalGroup={onJoinAdditionalGroup}
       onRefresh={onRefresh}
       refreshing={refreshing}
       album={album}
@@ -1325,8 +1395,9 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
   );
 }
 
-function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, album, teams, onRefresh, refreshing }) {
+function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, album, teams, onRefresh, refreshing }) {
   const totalStickers = album.length;
+  const [showJoinModal, setShowJoinModal] = useState(false);
 
   // Leaderboard: sort by completion %
   const leaderboard = useMemo(() => {
@@ -1418,12 +1489,40 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
     <div className="max-w-6xl mx-auto px-6 py-6">
       {/* Group header */}
       <div className="paper border-2 border-stone-900 p-4 mb-6 sticker-shadow flex items-center justify-between flex-wrap gap-3">
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="mono text-[10px] text-stone-600 tracking-widest">GROUP CODE</div>
-          <div className="display text-3xl text-stone-900">{profile.groupCode}</div>
+          <div className="display text-3xl text-stone-900 truncate">{profile.groupCode}</div>
           <div className="mono text-[10px] text-stone-600 mt-1">
             Share this code with friends. Anyone who joins with the same code sees the same trade board.
           </div>
+          {/* Multi-group switcher — hidden behind feature flag */}
+          {SHOW_GROUP_SWITCHER && profile.groups && profile.groups.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-stone-300">
+              <div className="mono text-[10px] text-stone-600 tracking-widest mb-2">YOUR GROUPS</div>
+              <div className="flex flex-wrap gap-2 items-center">
+                {profile.groups.map(g => (
+                  <button
+                    key={g}
+                    onClick={() => onSwitchGroup && onSwitchGroup(g)}
+                    className={`mono text-xs px-2 py-1 border-2 transition-colors ${
+                      g === profile.groupCode
+                        ? 'border-red-700 bg-red-700 text-white'
+                        : 'border-stone-900 bg-stone-50 text-stone-900 hover:bg-stone-200'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  className="mono text-xs px-2 py-1 border-2 border-dashed border-stone-700 bg-stone-50 text-stone-700 hover:bg-stone-100"
+                  title="Join another group"
+                >
+                  + Join another
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <button
@@ -1441,6 +1540,18 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
           </button>
         </div>
       </div>
+
+      {/* Join additional group modal — only renders when flag is on AND user opens it */}
+      {SHOW_GROUP_SWITCHER && showJoinModal && (
+        <JoinAdditionalGroupModal
+          existingGroups={profile.groups || []}
+          onJoin={async (code) => {
+            await onJoinAdditionalGroup(code);
+            setShowJoinModal(false);
+          }}
+          onClose={() => setShowJoinModal(false)}
+        />
+      )}
 
       {members.length === 0 ? (
         <div className="paper border-2 border-stone-900 p-8 text-center">
@@ -2646,6 +2757,78 @@ function SuggestModal({ authorName, onSubmit, onClose }) {
               </button>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// JOIN ADDITIONAL GROUP MODAL — used when SHOW_GROUP_SWITCHER is enabled
+// ============================================================================
+
+function JoinAdditionalGroupModal({ existingGroups, onJoin, onClose }) {
+  const [code, setCode] = useState('');
+  const trimmed = code.trim().toLowerCase().replace(/\s+/g, '-');
+  const isDuplicate = existingGroups.includes(trimmed);
+  const valid = trimmed.length >= 3 && !isDuplicate;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-900/80 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="paper border-4 border-stone-900 sticker-shadow w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-stone-900 text-amber-400 px-5 py-4 flex items-center justify-between">
+          <div>
+            <div className="display text-2xl leading-none">JOIN ANOTHER GROUP</div>
+            <div className="mono text-[10px] text-stone-400 mt-0.5">Add yourself to a second group</div>
+          </div>
+          <button onClick={onClose} className="text-amber-400 hover:text-white" aria-label="Close">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="serif text-stone-700 text-sm">
+            Enter the code of a different group you'd like to join. Your sticker collection is shared across all your groups.
+          </p>
+
+          <label className="block">
+            <div className="mono text-[10px] uppercase tracking-widest text-stone-600 mb-1">GROUP CODE</div>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="e.g. cousins-2026"
+              maxLength={40}
+              autoCapitalize="none"
+              autoCorrect="off"
+              className="w-full px-3 py-2 bg-stone-50 border-2 border-stone-900 mono focus:outline-none focus:border-red-700"
+              style={{ fontSize: '16px' }}
+            />
+            <div className={`mono text-[10px] mt-1 ${isDuplicate ? 'text-red-700' : 'text-stone-500'}`}>
+              {isDuplicate
+                ? "You're already in this group."
+                : 'Spaces will become dashes. Same as your other groups.'}
+            </div>
+          </label>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onClose}
+              className="mono text-xs uppercase px-3 py-2 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex-1"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => valid && onJoin(trimmed)}
+              disabled={!valid}
+              className="mono text-xs uppercase px-3 py-2 border-2 border-stone-900 bg-stone-900 text-amber-400 hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed flex-1"
+            >
+              Join group
+            </button>
+          </div>
         </div>
       </div>
     </div>
