@@ -1491,7 +1491,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
       <div className="paper border-2 border-stone-900 p-4 mb-6 sticker-shadow flex items-center justify-between flex-wrap gap-3">
         <div className="flex-1 min-w-0">
           <div className="mono text-[10px] text-stone-600 tracking-widest">GROUP CODE</div>
-          <div className="display text-3xl text-stone-900 truncate">{profile.groupCode}</div>
+          <div className="display text-stone-900 break-all leading-tight" style={{ fontSize: 'clamp(1.25rem, 5vw, 1.875rem)' }}>{profile.groupCode}</div>
           <div className="mono text-[10px] text-stone-600 mt-1">
             Share this code with friends. Anyone who joins with the same code sees the same trade board.
           </div>
@@ -1655,8 +1655,8 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
             <div className="grid md:grid-cols-2 gap-4">
               {/* They have what I need */}
               <div className="paper border-2 border-emerald-700 p-4">
-                <div className="mono text-[10px] uppercase tracking-widest text-emerald-700 mb-2">▼ THEY HAVE · I NEED</div>
-                <div className="mono text-[10px] text-stone-600 mb-3 -mt-1">Tap a sticker to ask that friend for it.</div>
+                <div className="mono text-sm font-bold uppercase tracking-wider text-emerald-700 mb-2">▼ THEY HAVE · I NEED</div>
+                <div className="mono text-[10px] text-stone-600 mb-3">Tap a sticker to ask that friend for it.</div>
                 {trades.offersForMe.length === 0 ? (
                   <div className="serif text-stone-600 text-sm italic">No matches yet — add more stickers as got/dupe.</div>
                 ) : (
@@ -1679,8 +1679,8 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
 
               {/* I have what they need */}
               <div className="paper border-2 border-orange-700 p-4">
-                <div className="mono text-[10px] uppercase tracking-widest text-orange-700 mb-2">▲ I HAVE · THEY NEED</div>
-                <div className="mono text-[10px] text-stone-600 mb-3 -mt-1">Tap a sticker to reserve it for that friend.</div>
+                <div className="mono text-sm font-bold uppercase tracking-wider text-orange-700 mb-2">▲ I HAVE · THEY NEED</div>
+                <div className="mono text-[10px] text-stone-600 mb-3">Tap a sticker to reserve it for that friend.</div>
                 {trades.wantsFromMe.length === 0 ? (
                   <div className="serif text-stone-600 text-sm italic">Mark some stickers as duplicates (count ≥ 2) to offer trades.</div>
                 ) : (
@@ -1711,7 +1711,7 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? stickers : stickers.slice(0, 12);
   const accentClass = accent === 'emerald' ? 'bg-emerald-100 border-emerald-700 text-emerald-900' : 'bg-orange-100 border-orange-700 text-orange-900';
-  const reservedClass = 'bg-stone-900 border-stone-900 text-amber-400 line-through opacity-90';
+  const reservedClass = 'bg-stone-900 border-stone-900 text-amber-400 font-bold';
   const requestedClass = 'bg-amber-300 border-amber-700 text-stone-900 font-bold';
   const reservedSet = new Set(reserved);
   const requestedSet = new Set(requested);
