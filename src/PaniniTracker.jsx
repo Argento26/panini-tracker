@@ -386,6 +386,32 @@ export default function PaniniTracker() {
     setView('album');
   };
 
+  // Total reset — wipes the local collection, timeline, and reservations.
+  // Profile (name + group code) is preserved. If in a group, the cleared collection
+  // syncs up to Firebase so groupmates see the reset too.
+  const resetCollection = async () => {
+    setCollection({});
+    setTimeline([]);
+    setReservations({});
+    // Clear local persisted copies right away (don't wait for the debounce)
+    await storage.set('panini-wc-2026', JSON.stringify({})).catch(() => {});
+    await storage.set('panini-wc-2026-timeline', JSON.stringify([])).catch(() => {});
+    await storage.set('panini-wc-2026-reservations', JSON.stringify({})).catch(() => {});
+    // Push the cleared state to the group entry so others see it
+    if (profile) {
+      const memberKey = `group:${profile.groupCode}:member:${profile.name}`;
+      const me = groupMembers.find(m => m.name === profile.name);
+      const payload = {
+        name: profile.name,
+        collection: {},
+        reservations: {},
+        incomingRequests: me?.incomingRequests || {},
+        updatedAt: Date.now(),
+      };
+      await storage.set(memberKey, JSON.stringify(payload), true).catch(() => {});
+    }
+  };
+
   // Save with debounce
   useEffect(() => {
     if (loading) return;
@@ -1084,7 +1110,13 @@ export default function PaniniTracker() {
       </footer>
 
       {/* WELCOME / HELP MODAL */}
-      {showWelcome && <WelcomeModal onClose={dismissWelcome} />}
+      {showWelcome && (
+        <WelcomeModal
+          onClose={dismissWelcome}
+          onReset={resetCollection}
+          collectedCount={stats.got}
+        />
+      )}
 
       {/* BACK TO TOP BUTTON */}
       <button
@@ -2283,7 +2315,18 @@ function PackMode({ album, collection, onAdd, onRemove, onClose }) {
 // WELCOME / HELP MODAL — shown once on first open, accessible via footer link
 // ============================================================================
 
-function WelcomeModal({ onClose }) {
+function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
+  const [resetMode, setResetMode] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const canReset = confirmText.trim().toUpperCase() === 'RESET';
+
+  const handleReset = async () => {
+    if (!canReset || !onReset) return;
+    await onReset();
+    setResetMode(false);
+    setConfirmText('');
+    onClose();
+  };
   return (
     <div className="fixed inset-0 z-50 bg-stone-900/80 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -2394,6 +2437,61 @@ function WelcomeModal({ onClose }) {
               💡 You can revisit this guide anytime by tapping the <strong>Help</strong> button at the top.
             </p>
           </section>
+
+          {/* DANGER ZONE — total reset */}
+          {onReset && (
+            <section className="border-t-2 border-red-300 pt-4 mt-2">
+              <h3 className="display text-lg text-red-700 mb-2">⚠ DANGER ZONE</h3>
+              {!resetMode ? (
+                <div className="space-y-2">
+                  <p className="text-stone-700 text-xs">
+                    Wipe all your sticker counts, timeline, and reservations on this device. Your name and group code stay. <strong>This can't be undone.</strong>
+                  </p>
+                  <button
+                    onClick={() => setResetMode(true)}
+                    className="mono text-xs uppercase px-3 py-1.5 border-2 border-red-700 bg-stone-50 text-red-700 hover:bg-red-50 transition-colors"
+                  >
+                    Reset everything
+                  </button>
+                </div>
+              ) : (
+                <div className="border-2 border-red-700 bg-red-50 p-3 space-y-2">
+                  <p className="text-stone-900 text-sm font-bold">
+                    This will erase {collectedCount > 0 ? <span className="text-red-700">{collectedCount}</span> : 'all'} sticker{collectedCount === 1 ? '' : 's'} you've logged.
+                  </p>
+                  <p className="text-stone-700 text-xs">
+                    Type <strong className="mono">RESET</strong> below to confirm.
+                  </p>
+                  <input
+                    type="text"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    placeholder="RESET"
+                    className="w-full px-3 py-2 bg-stone-50 border-2 border-red-700 mono text-sm text-center focus:outline-none focus:border-red-900"
+                    style={{ fontSize: '16px' }}
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setResetMode(false); setConfirmText(''); }}
+                      className="mono text-xs uppercase px-3 py-1.5 border-2 border-stone-900 bg-stone-50 hover:bg-stone-200 flex-1"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleReset}
+                      disabled={!canReset}
+                      className="mono text-xs uppercase px-3 py-1.5 border-2 border-red-900 bg-red-700 text-white hover:bg-red-800 disabled:opacity-30 disabled:cursor-not-allowed flex-1"
+                    >
+                      Reset everything
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         {/* Footer */}
