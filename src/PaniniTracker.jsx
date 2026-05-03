@@ -1150,7 +1150,7 @@ export default function PaniniTracker() {
                           {teamMeta?.color && (
                             <div className="w-1.5 h-7 flex-shrink-0" style={{ backgroundColor: teamMeta.color }} />
                           )}
-                          {teamMeta?.flag && <span className="text-xl flex-shrink-0">{teamMeta.flag}</span>}
+                          {teamMeta?.flag && <span className="text-2xl flex-shrink-0">{teamMeta.flag}</span>}
                           {teamMeta && (
                             <span className="mono text-xs font-bold text-stone-900 tracking-wider">{teamMeta.code}</span>
                           )}
@@ -1261,7 +1261,7 @@ function TeamButton({ code, name, color, flag, active, onClick, stats }) {
         <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: color }} />
       )}
       <div className="flex items-baseline gap-2 mt-0.5">
-        {flag && <span className="text-base leading-none">{flag}</span>}
+        {flag && <span className="text-2xl leading-none flex-shrink-0">{flag}</span>}
         <div className="mono text-[11px] tracking-wider font-bold">{code}</div>
         <div className={`serif text-[11px] truncate ${active ? 'text-stone-300' : 'text-stone-700'}`}>
           {name}
@@ -1441,12 +1441,9 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
         const reservedFor = (m.reservations || {})[id];
         return !reservedFor || reservedFor === profile.name;
       });
-      // Wants from me: stickers I'm offering, but exclude ones I've already reserved for someone else
-      const matchWants = myDupes.filter(id => {
-        if (!memberNeeds.includes(id)) return false;
-        const reservedFor = myReservations?.[id];
-        return !reservedFor || reservedFor === m.name;
-      });
+      // Wants from me: stickers I'm offering. Now we INCLUDE ones reserved for others
+      // so the user can see "this match exists but I already promised it to someone else"
+      const matchWants = myDupes.filter(id => memberNeeds.includes(id));
 
       // Stickers I've already requested from this member (look at THEIR incomingRequests)
       const incomingFromMe = m.incomingRequests || {};
@@ -1461,7 +1458,13 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
       }
       if (matchWants.length) {
         const reservedToThem = matchWants.filter(id => myReservations?.[id] === m.name);
-        wantsFromMe.push({ name: m.name, stickers: matchWants, reservedToThem });
+        // Build a map of stickers reserved to someone *other than* this member, with the other person's name
+        const reservedElsewhere = {};
+        matchWants.forEach(id => {
+          const owner = myReservations?.[id];
+          if (owner && owner !== m.name) reservedElsewhere[id] = owner;
+        });
+        wantsFromMe.push({ name: m.name, stickers: matchWants, reservedToThem, reservedElsewhere });
       }
     });
 
@@ -1720,6 +1723,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
                         accent="orange"
                         reserved={o.reservedToThem || []}
                         reservedLabel="reserved for them"
+                        reservedElsewhere={o.reservedElsewhere || {}}
                         onToggleReserve={(id) => onToggleReservation(id, o.name)}
                       />
                     ))}
@@ -1734,12 +1738,14 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
   );
 }
 
-function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, requested = [], onToggleRequest, onPing }) {
+function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, requested = [], onToggleRequest, onPing, reservedElsewhere = {} }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? stickers : stickers.slice(0, 12);
   const accentClass = accent === 'emerald' ? 'bg-emerald-100 border-emerald-700 text-emerald-900' : 'bg-orange-100 border-orange-700 text-orange-900';
   const reservedClass = 'bg-stone-900 border-stone-900 text-amber-400 font-bold';
   const requestedClass = 'bg-amber-300 border-amber-700 text-stone-900 font-bold';
+  // Greyed-out style for stickers reserved to someone else (visible but not actionable for this person)
+  const reservedElsewhereClass = 'bg-stone-200 border-stone-400 text-stone-500 line-through';
   const reservedSet = new Set(reserved);
   const requestedSet = new Set(requested);
   return (
@@ -1767,11 +1773,21 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
         {visible.map(id => {
           const isReserved = reservedSet.has(id);
           const isRequested = requestedSet.has(id);
-          const cls = isReserved ? reservedClass : (isRequested ? requestedClass : accentClass);
-          // Pick which click handler is active. Reserve takes priority on the orange (have) side; request on the green (need) side.
+          const elsewhereOwner = reservedElsewhere[id]; // who else has it reserved (if anyone)
+          const isElsewhere = !!elsewhereOwner && !isReserved;
+
+          let cls;
+          if (isReserved) cls = reservedClass;
+          else if (isElsewhere) cls = reservedElsewhereClass;
+          else if (isRequested) cls = requestedClass;
+          else cls = accentClass;
+
+          // Pick which click handler is active. Reserved-elsewhere = no click (it's locked away).
           let onClick = undefined;
           let title = '';
-          if (onToggleReserve) {
+          if (isElsewhere) {
+            title = `Reserved for ${elsewhereOwner}. Tap their row to un-reserve first.`;
+          } else if (onToggleReserve) {
             onClick = () => onToggleReserve(id);
             title = isReserved ? 'Tap to un-reserve' : `Tap to reserve for ${name}`;
           } else if (onToggleRequest) {
@@ -1788,8 +1804,10 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
               title={title}
             >
               {isReserved && <Lock size={8} className="inline mr-0.5 -mt-0.5" />}
-              {isRequested && !isReserved && <span className="mr-0.5">🙋</span>}
+              {isElsewhere && <Lock size={8} className="inline mr-0.5 -mt-0.5" />}
+              {isRequested && !isReserved && !isElsewhere && <span className="mr-0.5">🙋</span>}
               {id}
+              {isElsewhere && <span className="ml-1 text-[9px] not-italic">→{elsewhereOwner.split(' ')[0]}</span>}
             </button>
           );
         })}
