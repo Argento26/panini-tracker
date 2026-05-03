@@ -696,21 +696,21 @@ export default function PaniniTracker() {
     return lines.join('\n');
   };
 
-  const shareNeeds = async () => {
+  const shareNeeds = () => {
     const text = buildNeedsList();
+    // Same fix as pingPersonAboutReserved — fire share synchronously to keep iOS gesture context
     if (navigator.share) {
-      try {
-        await navigator.share({ title: 'My sticker needs', text });
-        return;
-      } catch {
+      navigator.share({ title: 'My sticker needs', text }).catch(() => {
         // User cancelled or share failed — fall through to clipboard
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      alert('Needs list copied to clipboard!');
-    } catch {
-      // Fallback: show the text in a prompt
+        navigator.clipboard?.writeText(text).then(() => {
+          alert('Needs list copied to clipboard!');
+        }).catch(() => window.prompt('Copy this list:', text));
+      });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Needs list copied to clipboard!');
+      }).catch(() => window.prompt('Copy this list:', text));
+    } else {
       window.prompt('Copy this list:', text);
     }
   };
@@ -1486,30 +1486,28 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
   }, [members, profile.name]);
 
   // Open iOS share sheet with a pre-formatted message about reserved stickers
-  const pingPersonAboutReserved = async (personName, stickerIds) => {
+  const pingPersonAboutReserved = (personName, stickerIds) => {
     const myFirstName = profile.name.split(' ')[0];
+    const themFirstName = personName.split(' ')[0];
     const list = stickerIds.length === 1
       ? stickerIds[0]
       : stickerIds.length === 2
         ? `${stickerIds[0]} and ${stickerIds[1]}`
         : `${stickerIds.slice(0, -1).join(', ')}, and ${stickerIds[stickerIds.length - 1]}`;
-    const text = stickerIds.length === 1
-      ? `Hey ${personName.split(' ')[0]}, you reserved ${list} for me on Locura Mundial — when can we trade? 🎉 — ${myFirstName}`
-      : `Hey ${personName.split(' ')[0]}, you reserved ${list} for me on Locura Mundial — when can we trade? 🎉 — ${myFirstName}`;
+    const text = `Hey ${themFirstName}, you reserved ${list} for me on Locura Mundial — when can we trade? 🎉 — ${myFirstName}`;
+    // CRITICAL: navigator.share must fire synchronously inside the click handler
+    // on iOS Safari, otherwise the user-gesture context is lost and the dialog
+    // won't open until the second tap. So no await on the share call itself.
     if (navigator.share) {
-      try {
-        await navigator.share({ text });
-      } catch (err) {
-        // User cancelled or share failed; ignore
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(text);
+      navigator.share({ text }).catch(() => {
+        // User cancelled or share failed; silently ignore
+      });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
         alert('Message copied to clipboard — paste it into WhatsApp or Messages.');
-      } catch {
-        alert(text);
-      }
+      }).catch(() => alert(text));
+    } else {
+      alert(text);
     }
   };
 
