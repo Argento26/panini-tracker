@@ -1,7 +1,7 @@
 {
-  "name": "The Sticker · WC 2026",
-  "short_name": "The Sticker",
-  "description": "Track your Panini World Cup 2026 sticker album and trade with friends.",
+  "name": "Locura Mundial · WC 2026",
+  "short_name": "Locura Mundial",
+  "description": "Track your World Cup 2026 sticker album and trade with friends.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f1e8",

@@ -741,15 +741,11 @@ export default function PaniniTracker() {
                 VOL. 26 · USA · CAN · MEX
               </div>
               <h1 className="display text-4xl sm:text-5xl text-stone-900 leading-none mt-1">
-                THE STICKER<span className="text-red-700">.</span>
+                LOCURA <span className="text-red-700">MUNDIAL</span>
               </h1>
-              {profile ? (
+              {profile && (
                 <p className="serif text-stone-700 mt-1.5 text-sm sm:text-base truncate">
                   Hello, <span className="font-bold text-stone-900">{profile.name.split(' ')[0]}</span>
-                </p>
-              ) : (
-                <p className="serif italic text-stone-600 mt-1.5 text-xs sm:text-sm hidden sm:block">
-                  Your 2026 FIFA World Cup companion
                 </p>
               )}
             </div>
@@ -2338,7 +2334,7 @@ function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
         <div className="bg-stone-900 text-amber-400 px-5 py-4 flex items-center justify-between flex-shrink-0">
           <div>
             <div className="display text-2xl leading-none">HOW TO USE</div>
-            <div className="mono text-[10px] text-stone-400 mt-0.5">Quick guide to The Sticker</div>
+            <div className="mono text-[10px] text-stone-400 mt-0.5">Quick guide to Locura Mundial</div>
           </div>
           <button onClick={onClose} className="text-amber-400 hover:text-white" aria-label="Close">
             <X size={20} />
