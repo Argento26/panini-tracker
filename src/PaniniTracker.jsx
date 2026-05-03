@@ -1485,6 +1485,34 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
     }));
   }, [members, profile.name]);
 
+  // Open iOS share sheet with a pre-formatted message about reserved stickers
+  const pingPersonAboutReserved = async (personName, stickerIds) => {
+    const myFirstName = profile.name.split(' ')[0];
+    const list = stickerIds.length === 1
+      ? stickerIds[0]
+      : stickerIds.length === 2
+        ? `${stickerIds[0]} and ${stickerIds[1]}`
+        : `${stickerIds.slice(0, -1).join(', ')}, and ${stickerIds[stickerIds.length - 1]}`;
+    const text = stickerIds.length === 1
+      ? `Hey ${personName.split(' ')[0]}, you reserved ${list} for me on Locura Mundial — when can we trade? 🎉 — ${myFirstName}`
+      : `Hey ${personName.split(' ')[0]}, you reserved ${list} for me on Locura Mundial — when can we trade? 🎉 — ${myFirstName}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+      } catch (err) {
+        // User cancelled or share failed; ignore
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('Message copied to clipboard — paste it into WhatsApp or Messages.');
+      } catch {
+        alert(text);
+      }
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-6">
       {/* Group header */}
@@ -1671,6 +1699,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
                         reservedLabel="reserved for you"
                         requested={o.requested || []}
                         onToggleRequest={(id) => onRequestSticker(o.name, id)}
+                        onPing={() => pingPersonAboutReserved(o.name, o.reservedToMe || [])}
                       />
                     ))}
                   </div>
@@ -1707,7 +1736,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
   );
 }
 
-function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, requested = [], onToggleRequest }) {
+function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, requested = [], onToggleRequest, onPing }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? stickers : stickers.slice(0, 12);
   const accentClass = accent === 'emerald' ? 'bg-emerald-100 border-emerald-700 text-emerald-900' : 'bg-orange-100 border-orange-700 text-orange-900';
@@ -1717,12 +1746,23 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
   const requestedSet = new Set(requested);
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1">
+      <div className="flex items-baseline justify-between mb-1 gap-2">
         <div className="serif font-bold text-stone-900">{name}</div>
-        <div className="mono text-[10px] text-stone-600">
-          {stickers.length} stickers
-          {reserved.length > 0 && <span className="ml-1 text-stone-900">· {reserved.length} {reservedLabel}</span>}
-          {requested.length > 0 && <span className="ml-1 text-amber-700">· {requested.length} asked</span>}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="mono text-[10px] text-stone-600">
+            {stickers.length} stickers
+            {reserved.length > 0 && <span className="ml-1 text-stone-900">· {reserved.length} {reservedLabel}</span>}
+            {requested.length > 0 && <span className="ml-1 text-amber-700">· {requested.length} asked</span>}
+          </div>
+          {onPing && reserved.length > 0 && (
+            <button
+              onClick={onPing}
+              className="mono text-[10px] uppercase font-bold px-2 py-1 border-2 border-emerald-700 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 flex items-center gap-1 transition-colors"
+              title={`Message ${name} about reserved stickers`}
+            >
+              <MessageCircle size={10} /> Ping
+            </button>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -2543,6 +2583,7 @@ function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
               <li><strong>Trade Board (left, green)</strong> — friends who have duplicates of stickers you need. <strong>Tap any sticker to ask</strong> that friend for it — they'll see the request next time they open the app.</li>
               <li><strong>Trade Board (right, orange)</strong> — stickers you have as duplicates that friends need. Tap one to <strong>reserve it</strong> for a specific friend, so you don't promise the same dupe to two people.</li>
               <li><strong>Requests from friends</strong> — when someone asks you for a sticker, you'll see it at the top of the Group tab. Tap <strong>Promise</strong> to reserve it for them, or <strong>Decline</strong> to dismiss.</li>
+              <li><strong>Ping button</strong> — once a friend has reserved one or more stickers for you, a green "Ping" button appears next to their name. Tap it to message them on WhatsApp / iMessage / wherever, with the sticker codes already filled in.</li>
             </ul>
             <p className="mt-2 text-stone-700 italic">
               Everything syncs in real time. When a friend logs a new sticker or asks for one, you see it within a second.
