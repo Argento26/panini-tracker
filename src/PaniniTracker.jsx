@@ -2448,8 +2448,9 @@ function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
           <section>
             <h3 className="display text-lg text-red-700 mb-1">Other useful buttons</h3>
             <ul className="space-y-1.5 ml-4 list-disc">
-              <li><strong>Share Needs</strong> (top right) — texts yourself or shares a clean list of missing stickers, perfect for trading with people outside your group.</li>
+              <li><strong>Share Needs</strong> — texts yourself or shares a clean list of missing stickers, perfect for trading with people outside your group.</li>
               <li><strong>Lock</strong> — disables all taps. Use this when you hand your phone to someone to look at the album without them accidentally changing things.</li>
+              <li><strong>💡 Suggest</strong> — got an idea or found a bug? Tap this to send a quick note straight to the developer. Be nice — or don't, your call.</li>
               <li><strong>Back to top arrow</strong> (floating bottom-right) — appears when you've scrolled down. Tap it to jump back to the masthead.</li>
             </ul>
           </section>
