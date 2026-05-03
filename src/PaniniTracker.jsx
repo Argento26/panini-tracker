@@ -889,6 +889,21 @@ export default function PaniniTracker() {
         </div>
       )}
 
+      {/* JOIN GROUP NUDGE — only when no profile exists */}
+      {!profile && !loading && (
+        <div className="bg-amber-100 border-b-2 border-amber-700 py-2 px-4 flex items-center justify-center gap-3 flex-wrap text-stone-900">
+          <span className="serif text-sm">
+            👋 <strong>Welcome!</strong> Join your friends in a group to trade stickers.
+          </span>
+          <button
+            onClick={() => setView('group')}
+            className="mono text-[11px] uppercase tracking-wider font-bold px-3 py-1 bg-stone-900 text-amber-400 hover:bg-red-700 transition-colors"
+          >
+            Join now →
+          </button>
+        </div>
+      )}
+
       {/* VIEW TABS */}
       <div className="paper border-b-2 border-stone-900">
         <div className="max-w-6xl mx-auto flex">
