@@ -626,6 +626,40 @@ export default function PaniniTracker() {
     });
   };
 
+  // Mark a trade as completed: decrement my count, increment friend's count, clear reservation.
+  // The friend's collection is updated by writing directly to their Firebase entry.
+  const completeTrade = async (stickerId, friendName) => {
+    if (!profile) return;
+    if (!confirm(`Confirm: you gave ${stickerId} to ${friendName}? This will update both your collections.`)) return;
+
+    // 1. Decrement my count
+    setCollection(prev => {
+      const cur = prev[stickerId] || 0;
+      if (cur <= 0) return prev;
+      const next = { ...prev };
+      if (cur === 1) delete next[stickerId];
+      else next[stickerId] = cur - 1;
+      return next;
+    });
+
+    // 2. Clear my reservation for this sticker
+    setReservations(prev => {
+      const next = { ...prev };
+      delete next[stickerId];
+      return next;
+    });
+
+    // 3. Increment the friend's count by writing to their Firebase entry
+    const target = groupMembers.find(m => m.name === friendName);
+    if (target) {
+      const friendCol = { ...(target.collection || {}) };
+      friendCol[stickerId] = (friendCol[stickerId] || 0) + 1;
+      const updated = { ...target, collection: friendCol, updatedAt: Date.now() };
+      const memberKey = `group:${profile.groupCode}:member:${friendName}`;
+      await storage.set(memberKey, JSON.stringify(updated), true).catch(() => {});
+    }
+  };
+
   // Ask another member for a sticker. Writes to THAT member's incomingRequests on Firebase.
   const requestStickerFromMember = async (memberName, stickerId) => {
     if (!profile) return;
@@ -946,6 +980,7 @@ export default function PaniniTracker() {
           myCollection={collection}
           myReservations={reservations}
           onToggleReservation={toggleReservation}
+          onCompleteTrade={completeTrade}
           onRequestSticker={requestStickerFromMember}
           onPromiseRequest={promiseRequest}
           onDeclineRequest={declineRequest}
@@ -1384,7 +1419,7 @@ function getSpecialStats(album, collection, team) {
 // GROUP VIEW — leaderboard, trade matching, member management
 // ============================================================================
 
-function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, onRefresh, refreshing, album, teams }) {
+function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onCompleteTrade, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, onRefresh, refreshing, album, teams }) {
   // Profile setup screen
   if (!profile) {
     return <ProfileSetup onSave={onSaveProfile} />;
@@ -1397,6 +1432,7 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
       myCollection={myCollection}
       myReservations={myReservations}
       onToggleReservation={onToggleReservation}
+      onCompleteTrade={onCompleteTrade}
       onRequestSticker={onRequestSticker}
       onPromiseRequest={onPromiseRequest}
       onDeclineRequest={onDeclineRequest}
@@ -1410,7 +1446,7 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
   );
 }
 
-function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, album, teams, onRefresh, refreshing }) {
+function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onCompleteTrade, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, album, teams, onRefresh, refreshing }) {
   const totalStickers = album.length;
   const [showJoinModal, setShowJoinModal] = useState(false);
 
@@ -1456,7 +1492,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
         const reservedFor = (m.reservations || {})[id];
         return !reservedFor || reservedFor === profile.name;
       });
-      // Wants from me: stickers I'm offering. Now we INCLUDE ones reserved for others
+      // Wants from me: stickers I'm offering. We INCLUDE ones reserved for others,
       // so the user can see "this match exists but I already promised it to someone else"
       const matchWants = myDupes.filter(id => memberNeeds.includes(id));
 
@@ -1473,11 +1509,22 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
       }
       if (matchWants.length) {
         const reservedToThem = matchWants.filter(id => myReservations?.[id] === m.name);
-        // Build a map of stickers reserved to someone *other than* this member, with the other person's name
+        // Build a map of stickers reserved to someone *other than* this member.
+        // BUT: only show as "blocked" if I don't have *another* dupe still available.
+        // Tradeable copies = total dupes (count - 1) — count of copies already reserved to others.
+        // For now, with one-reservation-per-sticker, "reserved" counts as 1 spoken-for copy.
         const reservedElsewhere = {};
         matchWants.forEach(id => {
           const owner = myReservations?.[id];
-          if (owner && owner !== m.name) reservedElsewhere[id] = owner;
+          if (!owner || owner === m.name) return;
+          const totalCopies = myCollection[id] || 0;
+          const tradeableCopies = Math.max(0, totalCopies - 1); // I keep one for myself
+          const promisedCopies = 1; // single reservation map = 1 copy spoken for
+          const stillAvailable = tradeableCopies - promisedCopies;
+          // Only mark as "reserved elsewhere" if there's nothing left to offer this person
+          if (stillAvailable <= 0) {
+            reservedElsewhere[id] = owner;
+          }
         });
         wantsFromMe.push({ name: m.name, stickers: matchWants, reservedToThem, reservedElsewhere });
       }
@@ -1726,6 +1773,12 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
               <div className="paper border-2 border-orange-700 p-4">
                 <div className="mono text-sm font-bold uppercase tracking-wider text-orange-700 mb-2">▲ I HAVE · THEY NEED</div>
                 <div className="mono text-[10px] text-stone-600 mb-3">Tap a sticker to reserve it for that friend.</div>
+                {/* Reminder banner — only when there are active reservations */}
+                {trades.wantsFromMe.some(o => (o.reservedToThem || []).length > 0) && (
+                  <div className="bg-amber-50 border-l-4 border-amber-500 p-2 mb-3 serif text-xs text-stone-800">
+                    💡 <strong>Already traded any of these?</strong> Tap <span className="mono bg-emerald-600 text-white px-1">✓ Done</span> on each to update both your counts and keep your dupes accurate.
+                  </div>
+                )}
                 {trades.wantsFromMe.length === 0 ? (
                   <div className="serif text-stone-600 text-sm italic">Mark some stickers as duplicates (count ≥ 2) to offer trades.</div>
                 ) : (
@@ -1740,6 +1793,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
                         reservedLabel="reserved for them"
                         reservedElsewhere={o.reservedElsewhere || {}}
                         onToggleReserve={(id) => onToggleReservation(id, o.name)}
+                        onCompleteTrade={(id) => onCompleteTrade(id, o.name)}
                       />
                     ))}
                   </div>
@@ -1753,7 +1807,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
   );
 }
 
-function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, requested = [], onToggleRequest, onPing, reservedElsewhere = {} }) {
+function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onToggleReserve, onCompleteTrade, requested = [], onToggleRequest, onPing, reservedElsewhere = {} }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? stickers : stickers.slice(0, 12);
   const accentClass = accent === 'emerald' ? 'bg-emerald-100 border-emerald-700 text-emerald-900' : 'bg-orange-100 border-orange-700 text-orange-900';
@@ -1784,11 +1838,11 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
           )}
         </div>
       </div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1 items-center">
         {visible.map(id => {
           const isReserved = reservedSet.has(id);
           const isRequested = requestedSet.has(id);
-          const elsewhereOwner = reservedElsewhere[id]; // who else has it reserved (if anyone)
+          const elsewhereOwner = reservedElsewhere[id];
           const isElsewhere = !!elsewhereOwner && !isReserved;
 
           let cls;
@@ -1797,7 +1851,6 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
           else if (isRequested) cls = requestedClass;
           else cls = accentClass;
 
-          // Pick which click handler is active. Reserved-elsewhere = no click (it's locked away).
           let onClick = undefined;
           let title = '';
           if (isElsewhere) {
@@ -1810,6 +1863,30 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
             title = isRequested ? `Tap to cancel request for ${id}` : `Tap to ask ${name} for ${id}`;
           }
           const clickable = !!onClick;
+
+          // Reserved sticker on the orange (I HAVE) side → render with a ✓ Done button next to it
+          if (isReserved && onCompleteTrade) {
+            return (
+              <span key={id} className="inline-flex border-2 border-stone-900">
+                <button
+                  onClick={onClick}
+                  disabled={!clickable}
+                  className={`mono text-[10px] px-1.5 py-0.5 ${reservedClass} border-0 cursor-pointer hover:scale-105 transition-transform`}
+                  title={title}
+                >
+                  <Lock size={8} className="inline mr-0.5 -mt-0.5" />{id}
+                </button>
+                <button
+                  onClick={() => onCompleteTrade(id)}
+                  className="mono text-[10px] px-1.5 py-0.5 bg-emerald-600 text-white border-0 border-l-2 border-stone-900 hover:bg-emerald-500 transition-colors font-bold"
+                  title={`Mark ${id} as traded with ${name}`}
+                >
+                  ✓ Done
+                </button>
+              </span>
+            );
+          }
+
           return (
             <button
               key={id}
@@ -1818,7 +1895,6 @@ function TradeRow({ name, stickers, accent, reserved = [], reservedLabel, onTogg
               className={`mono text-[10px] px-1.5 py-0.5 border ${cls} ${clickable ? 'cursor-pointer hover:scale-105 transition-transform' : 'cursor-default'}`}
               title={title}
             >
-              {isReserved && <Lock size={8} className="inline mr-0.5 -mt-0.5" />}
               {isElsewhere && <Lock size={8} className="inline mr-0.5 -mt-0.5" />}
               {isRequested && !isReserved && !isElsewhere && <span className="mr-0.5">🙋</span>}
               {id}
@@ -2613,6 +2689,7 @@ function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
               <li><strong>Leaderboard</strong> — who's closest to completing the album.</li>
               <li><strong>Trade Board (left, green)</strong> — friends who have duplicates of stickers you need. <strong>Tap any sticker to ask</strong> that friend for it — they'll see the request next time they open the app.</li>
               <li><strong>Trade Board (right, orange)</strong> — stickers you have as duplicates that friends need. Tap one to <strong>reserve it</strong> for a specific friend, so you don't promise the same dupe to two people.</li>
+              <li><strong>✓ Done button</strong> — once you've handed the sticker to your friend in person, tap the green ✓ Done next to the reserved sticker. Your count goes -1, their count goes +1, and the trade is logged for both of you. Confirmation prompt prevents misclicks.</li>
               <li><strong>Requests from friends</strong> — when someone asks you for a sticker, you'll see it at the top of the Group tab. Tap <strong>Promise</strong> to reserve it for them, or <strong>Decline</strong> to dismiss.</li>
               <li><strong>Ping button</strong> — once a friend has reserved one or more stickers for you, a green "Ping" button appears next to their name. Tap it to message them on WhatsApp / iMessage / wherever, with the sticker codes already filled in.</li>
             </ul>
