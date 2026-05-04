@@ -1777,17 +1777,10 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
                           <span className="mono text-xs font-bold text-stone-900">{item.stickerId}</span>
                           <button
                             onClick={() => onAcceptIncomingTrade(item.key, item.stickerId)}
-                            className="mono text-[9px] uppercase px-2 py-0.5 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors"
-                            title="Add this sticker to my collection"
+                            className="mono text-[9px] uppercase px-2 py-0.5 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors font-bold"
+                            title="Confirm you received this sticker and add it to your collection"
                           >
-                            ✓ Add
-                          </button>
-                          <button
-                            onClick={() => onDeclineIncomingTrade(item.key)}
-                            className="mono text-[9px] uppercase px-2 py-0.5 bg-stone-200 text-stone-900 hover:bg-red-100 transition-colors"
-                            title="Didn't actually receive — dismiss"
-                          >
-                            ✗ Skip
+                            ✓ Add to collection
                           </button>
                         </div>
                       ))}
@@ -1795,7 +1788,7 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
                   </div>
                 ))}
                 <div className="mono text-[9px] text-stone-600 italic pt-1">
-                  Tap Add when you have the physical sticker in hand. Skip if it didn't actually happen.
+                  Tap Add when you have the physical sticker in hand.
                 </div>
               </div>
             </section>
