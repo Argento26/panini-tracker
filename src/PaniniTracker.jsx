@@ -358,13 +358,14 @@ export default function PaniniTracker() {
     if (loading || !profile) return;
     const t = setTimeout(() => {
       const memberKey = `group:${profile.groupCode}:member:${profile.name}`;
-      // Preserve incomingRequests (other members write to this field)
+      // Preserve incomingRequests + incomingTrades (other members write to these)
       const me = groupMembers.find(m => m.name === profile.name);
       const payload = {
         name: profile.name,
         collection,
         reservations,
         incomingRequests: me?.incomingRequests || {},
+        incomingTrades: me?.incomingTrades || {},
         updatedAt: Date.now(),
       };
       storage.set(memberKey, JSON.stringify(payload), true).catch(() => {});
@@ -630,7 +631,7 @@ export default function PaniniTracker() {
   // The friend's collection is updated by writing directly to their Firebase entry.
   const completeTrade = async (stickerId, friendName) => {
     if (!profile) return;
-    if (!confirm(`Confirm: you gave ${stickerId} to ${friendName}? This will update both your collections.`)) return;
+    if (!confirm(`Confirm: you gave ${stickerId} to ${friendName}? They'll see it in their app and can add it to their collection.`)) return;
 
     // 1. Decrement my count
     setCollection(prev => {
@@ -649,15 +650,50 @@ export default function PaniniTracker() {
       return next;
     });
 
-    // 3. Increment the friend's count by writing to their Firebase entry
+    // 3. Notify the friend by writing to their incomingTrades on Firebase.
+    // We DO NOT write to their collection — they confirm receipt on their side.
     const target = groupMembers.find(m => m.name === friendName);
     if (target) {
-      const friendCol = { ...(target.collection || {}) };
-      friendCol[stickerId] = (friendCol[stickerId] || 0) + 1;
-      const updated = { ...target, collection: friendCol, updatedAt: Date.now() };
+      const incomingTrades = { ...(target.incomingTrades || {}) };
+      // Use random suffix in key so multiple trades of the same sticker don't collide
+      const key = `${profile.name}|${stickerId}|${Date.now()}`;
+      incomingTrades[key] = { from: profile.name, stickerId, ts: Date.now() };
+      const updated = { ...target, incomingTrades, updatedAt: Date.now() };
       const memberKey = `group:${profile.groupCode}:member:${friendName}`;
       await storage.set(memberKey, JSON.stringify(updated), true).catch(() => {});
     }
+  };
+
+  // Accept an incoming trade: add the sticker to my collection, clear the notification.
+  const acceptIncomingTrade = async (key, stickerId) => {
+    if (!profile) return;
+    setCollection(prev => ({ ...prev, [stickerId]: (prev[stickerId] || 0) + 1 }));
+    // Also push a timeline entry so the chart updates
+    setTimeline(t => [...t, { stickerId, ts: Date.now() }]);
+    await clearIncomingTrade(key);
+  };
+
+  // Decline an incoming trade: just clear the notification (e.g. didn't actually receive it)
+  const declineIncomingTrade = async (key) => {
+    await clearIncomingTrade(key);
+  };
+
+  // Helper: remove a single incoming trade from MY entry
+  const clearIncomingTrade = async (key) => {
+    if (!profile) return;
+    const me = groupMembers.find(m => m.name === profile.name);
+    const incomingTrades = { ...(me?.incomingTrades || {}) };
+    delete incomingTrades[key];
+    const memberKey = `group:${profile.groupCode}:member:${profile.name}`;
+    const payload = {
+      name: profile.name,
+      collection,
+      reservations,
+      incomingRequests: me?.incomingRequests || {},
+      incomingTrades,
+      updatedAt: Date.now(),
+    };
+    await storage.set(memberKey, JSON.stringify(payload), true).catch(() => {});
   };
 
   // Ask another member for a sticker. Writes to THAT member's incomingRequests on Firebase.
@@ -702,6 +738,7 @@ export default function PaniniTracker() {
       collection,
       reservations,
       incomingRequests: incoming,
+      incomingTrades: me?.incomingTrades || {},
       updatedAt: Date.now(),
     };
     await storage.set(memberKey, JSON.stringify(payload), true).catch(() => {});
@@ -981,6 +1018,8 @@ export default function PaniniTracker() {
           myReservations={reservations}
           onToggleReservation={toggleReservation}
           onCompleteTrade={completeTrade}
+          onAcceptIncomingTrade={acceptIncomingTrade}
+          onDeclineIncomingTrade={declineIncomingTrade}
           onRequestSticker={requestStickerFromMember}
           onPromiseRequest={promiseRequest}
           onDeclineRequest={declineRequest}
@@ -1419,7 +1458,7 @@ function getSpecialStats(album, collection, team) {
 // GROUP VIEW — leaderboard, trade matching, member management
 // ============================================================================
 
-function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onCompleteTrade, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, onRefresh, refreshing, album, teams }) {
+function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onCompleteTrade, onAcceptIncomingTrade, onDeclineIncomingTrade, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, onRefresh, refreshing, album, teams }) {
   // Profile setup screen
   if (!profile) {
     return <ProfileSetup onSave={onSaveProfile} />;
@@ -1433,6 +1472,8 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
       myReservations={myReservations}
       onToggleReservation={onToggleReservation}
       onCompleteTrade={onCompleteTrade}
+      onAcceptIncomingTrade={onAcceptIncomingTrade}
+      onDeclineIncomingTrade={onDeclineIncomingTrade}
       onRequestSticker={onRequestSticker}
       onPromiseRequest={onPromiseRequest}
       onDeclineRequest={onDeclineRequest}
@@ -1446,7 +1487,7 @@ function GroupView({ profile, onSaveProfile, onLeaveGroup, members, myCollection
   );
 }
 
-function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onCompleteTrade, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, album, teams, onRefresh, refreshing }) {
+function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReservations, onToggleReservation, onCompleteTrade, onAcceptIncomingTrade, onDeclineIncomingTrade, onRequestSticker, onPromiseRequest, onDeclineRequest, onSwitchGroup, onJoinAdditionalGroup, album, teams, onRefresh, refreshing }) {
   const totalStickers = album.length;
   const [showJoinModal, setShowJoinModal] = useState(false);
 
@@ -1545,6 +1586,23 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
       byAsker[r.from].push({ stickerId: r.stickerId, ts: r.ts });
     });
     return Object.entries(byAsker).map(([from, items]) => ({
+      from,
+      items: items.sort((a, b) => a.stickerId.localeCompare(b.stickerId)),
+    }));
+  }, [members, profile.name]);
+
+  // Incoming trade deliveries — friends marked Done on stickers they gave to me
+  const myIncomingTrades = useMemo(() => {
+    const me = members.find(m => m.name === profile.name);
+    const incomingTrades = me?.incomingTrades || {};
+    // Group by sender (preserve the underlying key for each item so we can clear it later)
+    const bySender = {};
+    Object.entries(incomingTrades).forEach(([key, r]) => {
+      if (!r || !r.from || !r.stickerId) return;
+      if (!bySender[r.from]) bySender[r.from] = [];
+      bySender[r.from].push({ key, stickerId: r.stickerId, ts: r.ts });
+    });
+    return Object.entries(bySender).map(([from, items]) => ({
       from,
       items: items.sort((a, b) => a.stickerId.localeCompare(b.stickerId)),
     }));
@@ -1687,6 +1745,53 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
               ))}
             </div>
           </section>
+
+          {/* INCOMING TRADES — friends gave me stickers, I confirm receipt to add them */}
+          {myIncomingTrades.length > 0 && (
+            <section className="mb-8">
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className="text-2xl">📦</span>
+                <h2 className="display text-2xl text-stone-900">INCOMING TRADES</h2>
+                <div className="flex-1 border-b border-stone-300" />
+                <span className="mono text-[10px] text-emerald-700 font-bold">
+                  {myIncomingTrades.reduce((n, r) => n + r.items.length, 0)} pending
+                </span>
+              </div>
+              <div className="paper border-2 border-emerald-700 p-4 space-y-4 sticker-shadow">
+                {myIncomingTrades.map(req => (
+                  <div key={req.from} className="border-b border-stone-300 last:border-b-0 pb-3 last:pb-0">
+                    <div className="serif font-bold text-stone-900 mb-2">
+                      <span className="text-emerald-700">{req.from}</span> gave you:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {req.items.map(item => (
+                        <div key={item.key} className="flex items-center gap-1 border-2 border-emerald-700 bg-emerald-50 px-2 py-1">
+                          <span className="mono text-xs font-bold text-stone-900">{item.stickerId}</span>
+                          <button
+                            onClick={() => onAcceptIncomingTrade(item.key, item.stickerId)}
+                            className="mono text-[9px] uppercase px-2 py-0.5 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors"
+                            title="Add this sticker to my collection"
+                          >
+                            ✓ Add
+                          </button>
+                          <button
+                            onClick={() => onDeclineIncomingTrade(item.key)}
+                            className="mono text-[9px] uppercase px-2 py-0.5 bg-stone-200 text-stone-900 hover:bg-red-100 transition-colors"
+                            title="Didn't actually receive — dismiss"
+                          >
+                            ✗ Skip
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="mono text-[9px] text-stone-600 italic pt-1">
+                  Tap Add when you have the physical sticker in hand. Skip if it didn't actually happen.
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* INCOMING REQUESTS — shown when other members have asked me for stickers */}
           {myIncoming.length > 0 && (
@@ -2689,7 +2794,8 @@ function WelcomeModal({ onClose, onReset, collectedCount = 0 }) {
               <li><strong>Leaderboard</strong> — who's closest to completing the album.</li>
               <li><strong>Trade Board (left, green)</strong> — friends who have duplicates of stickers you need. <strong>Tap any sticker to ask</strong> that friend for it — they'll see the request next time they open the app.</li>
               <li><strong>Trade Board (right, orange)</strong> — stickers you have as duplicates that friends need. Tap one to <strong>reserve it</strong> for a specific friend, so you don't promise the same dupe to two people.</li>
-              <li><strong>✓ Done button</strong> — once you've handed the sticker to your friend in person, tap the green ✓ Done next to the reserved sticker. Your count goes -1, their count goes +1, and the trade is logged for both of you. Confirmation prompt prevents misclicks.</li>
+              <li><strong>✓ Done button</strong> — once you've handed the sticker to your friend in person, tap the green ✓ Done next to the reserved sticker on your side. Your count goes -1 and the friend gets a notification on their app to add it to their collection.</li>
+              <li><strong>📦 Incoming trades</strong> — when a friend taps Done after giving you a sticker, you'll see a notification at the top of the Group tab. Tap <strong>Add</strong> when you have the physical sticker in hand, or <strong>Skip</strong> if it didn't actually happen.</li>
               <li><strong>Requests from friends</strong> — when someone asks you for a sticker, you'll see it at the top of the Group tab. Tap <strong>Promise</strong> to reserve it for them, or <strong>Decline</strong> to dismiss.</li>
               <li><strong>Ping button</strong> — once a friend has reserved one or more stickers for you, a green "Ping" button appears next to their name. Tap it to message them on WhatsApp / iMessage / wherever, with the sticker codes already filled in.</li>
             </ul>
