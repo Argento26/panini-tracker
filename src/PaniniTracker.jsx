@@ -1527,11 +1527,19 @@ function GroupViewInner({ profile, onLeaveGroup, members, myCollection, myReserv
       const memberDupes = album.filter(s => (m.collection?.[s.id] || 0) >= 2).map(s => s.id);
       const memberNeeds = album.filter(s => !(m.collection?.[s.id])).map(s => s.id);
 
-      // Filter: offers for me are stickers m has as dupes, but exclude ones m has reserved for someone other than me
+      // Filter: offers for me are stickers m has as dupes.
+      // Multi-copy aware: m might have 3 copies of CZE1 and reserved 1 to Vicente — there's still 1 spare available.
+      // tradeable = (totalCopies - 1, since m keeps one) - count promised to others.
       const matchOffers = myNeeds.filter(id => {
         if (!memberDupes.includes(id)) return false;
         const reservedFor = (m.reservations || {})[id];
-        return !reservedFor || reservedFor === profile.name;
+        if (!reservedFor || reservedFor === profile.name) return true; // unreserved or reserved for me
+        // Reserved to someone else — but if m has more copies, one might still be available
+        const totalCopies = m.collection?.[id] || 0;
+        const tradeableCopies = Math.max(0, totalCopies - 1); // m keeps one
+        const promisedCopies = 1; // one reservation = 1 copy spoken for
+        const stillAvailable = tradeableCopies - promisedCopies;
+        return stillAvailable > 0;
       });
       // Wants from me: stickers I'm offering. We INCLUDE ones reserved for others,
       // so the user can see "this match exists but I already promised it to someone else"
