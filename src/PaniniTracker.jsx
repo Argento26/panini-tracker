@@ -425,9 +425,12 @@ export default function PaniniTracker() {
       // Found existing data — pull it into localStorage instead of overwriting Firebase
       setCollection(existing.collection || {});
       setReservations(existing.reservations || {});
-      // Write the restored state to local storage immediately so the sync effect doesn't
-      // race and write our (empty) local state back up
-      await storage.set('panini-wc-2026-collection', JSON.stringify(existing.collection || {})).catch(() => {});
+      // Write the restored state to local storage IMMEDIATELY so the sync effect doesn't
+      // race and write our (empty) local state back up, AND so reloads pick up the restored data.
+      // IMPORTANT: keys must match exactly what the load effect reads:
+      //   collection → 'panini-wc-2026'
+      //   reservations → 'panini-wc-2026-reservations'
+      await storage.set('panini-wc-2026', JSON.stringify(existing.collection || {})).catch(() => {});
       await storage.set('panini-wc-2026-reservations', JSON.stringify(existing.reservations || {})).catch(() => {});
     }
 
