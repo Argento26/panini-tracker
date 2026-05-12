@@ -401,14 +401,47 @@ export default function PaniniTracker() {
     const existingGroups = profile?.groups || [];
     const groups = existingGroups.includes(cleanCode) ? existingGroups : [...existingGroups, cleanCode];
     const newProfile = { name: cleanName, groupCode: cleanCode, groups };
+
+    // CRITICAL: Before writing anything to Firebase, check if this name already has data in this group.
+    // This handles the "new device / reinstall / restore from backup" case — we want to PULL existing
+    // data down to localStorage instead of overwriting it with our empty local state.
+    const memberKey = `group:${cleanCode}:member:${cleanName}`;
+    let existing = null;
+    try {
+      const result = await storage.get(memberKey, true); // true = shared/global storage (Firebase)
+      if (result?.value) {
+        existing = JSON.parse(result.value);
+      }
+    } catch {
+      // No existing entry — fresh join
+    }
+
+    if (existing && existing.collection && Object.keys(existing.collection).length > 0) {
+      // Found existing data — pull it into localStorage instead of overwriting Firebase
+      setCollection(existing.collection || {});
+      setReservations(existing.reservations || {});
+      // Write the restored state to local storage immediately so the sync effect doesn't
+      // race and write our (empty) local state back up
+      await storage.set('panini-wc-2026-collection', JSON.stringify(existing.collection || {})).catch(() => {});
+      await storage.set('panini-wc-2026-reservations', JSON.stringify(existing.reservations || {})).catch(() => {});
+    }
+
     setProfile(newProfile);
     await storage.set('panini-wc-2026-profile', JSON.stringify(newProfile)).catch(() => {});
-    // Immediately publish current collection
-    const memberKey = `group:${newProfile.groupCode}:member:${newProfile.name}`;
+
+    // Write the member entry. If we found existing data, preserve it; otherwise write empty.
+    const collectionToPublish = existing && existing.collection && Object.keys(existing.collection).length > 0
+      ? existing.collection
+      : collection;
+    const reservationsToPublish = existing && existing.reservations
+      ? existing.reservations
+      : reservations;
     await storage.set(memberKey, JSON.stringify({
-      name: newProfile.name,
-      collection,
-      reservations,
+      name: cleanName,
+      collection: collectionToPublish,
+      reservations: reservationsToPublish,
+      incomingRequests: existing?.incomingRequests || {},
+      incomingTrades: existing?.incomingTrades || {},
       updatedAt: Date.now(),
     }), true).catch(() => {});
   };
