@@ -1384,13 +1384,13 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked, highli
       className={`relative border-2 p-3 sticker-shadow transition-all ${bgClass} ${locked ? 'opacity-90' : ''} ${highlighted ? 'search-pulse' : ''}`}
     >
       {/* Sticker number badge */}
-      <div className="absolute -top-2 -left-2 bg-stone-900 text-amber-400 mono text-[10px] px-1.5 py-0.5 border border-stone-900">
+      <div className="absolute -top-2 -left-2 bg-stone-900 text-amber-400 mono text-xs px-1.5 py-0.5 border border-stone-900 font-bold">
         {sticker.id}
       </div>
 
       {/* "Special" indicator */}
       {sticker.special && (
-        <div className="absolute -top-2 -right-2 bg-red-700 text-white mono text-[8px] px-1.5 py-0.5">
+        <div className="absolute -top-2 -right-2 bg-red-700 text-white mono text-[9px] px-1.5 py-0.5">
           SPECIAL
         </div>
       )}
@@ -1398,17 +1398,17 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked, highli
       {/* Got stamp */}
       {got && !needMode && (
         <div className="absolute top-2 right-2 stamp-anim">
-          <div className="border-2 border-emerald-700 text-emerald-700 mono text-[8px] font-bold px-1 py-0.5 rotate-[-12deg] opacity-80">
+          <div className="border-2 border-emerald-700 text-emerald-700 mono text-[9px] font-bold px-1 py-0.5 rotate-[-12deg] opacity-80">
             ✓ GOT
           </div>
         </div>
       )}
 
       <div className="mt-3 mb-2">
-        <div className="serif font-bold text-sm leading-tight text-stone-900">
+        <div className="serif font-bold text-base leading-tight text-stone-900">
           {sticker.label}
         </div>
-        <div className="mono text-[10px] text-stone-600 mt-0.5">
+        <div className="mono text-[11px] text-stone-600 mt-0.5">
           {sticker.section}
         </div>
       </div>
@@ -1418,7 +1418,7 @@ function StickerCard({ sticker, count, onAdd, onRemove, needMode, locked, highli
         <button
           onClick={onAdd}
           disabled={locked}
-          className="w-full mt-3 px-2 py-2 bg-emerald-700 hover:bg-emerald-600 text-white mono text-[11px] uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full mt-3 px-2 py-2 bg-emerald-700 hover:bg-emerald-600 text-white mono text-xs uppercase tracking-wider font-bold transition-colors flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Check size={14} /> I got it!
         </button>
