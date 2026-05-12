@@ -410,10 +410,15 @@ export default function PaniniTracker() {
     try {
       const result = await storage.get(memberKey, true); // true = shared/global storage (Firebase)
       if (result?.value) {
-        existing = JSON.parse(result.value);
+        // Handle both formats: app-written values are JSON strings; manually-pasted backups may be raw objects.
+        if (typeof result.value === 'string') {
+          existing = JSON.parse(result.value);
+        } else if (typeof result.value === 'object') {
+          existing = result.value;
+        }
       }
     } catch {
-      // No existing entry — fresh join
+      // No existing entry, or parse failed — fall through to fresh join
     }
 
     if (existing && existing.collection && Object.keys(existing.collection).length > 0) {
