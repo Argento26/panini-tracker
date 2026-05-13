@@ -395,7 +395,17 @@ export default function PaniniTracker() {
 
   const saveProfile = async (name, groupCode) => {
     const cleanCode = groupCode.trim().toLowerCase().replace(/\s+/g, '-');
-    const cleanName = name.trim();
+    // Normalize the name to prevent duplicate entries from inconsistent casing/spacing:
+    //   "daniel LIBRIZZI", "Daniel librizzi", "DANIEL Librizzi" all → "Daniel Librizzi"
+    // - trim leading/trailing whitespace
+    // - collapse multiple spaces to single space
+    // - uppercase first letter of each word, lowercase the rest
+    const cleanName = name
+      .trim()
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
     // If the user already had a profile (e.g. someone editing their name), keep the groups list.
     // Otherwise initialize with this single group.
     const existingGroups = profile?.groups || [];
